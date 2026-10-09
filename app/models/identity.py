@@ -15,6 +15,7 @@ class Company(Base, UUIDPrimaryKey, Timestamped):
     timezone: Mapped[str] = mapped_column(String(64), default="UTC", nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
     customer_sequence: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    agreement_sequence: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     users: Mapped[list["User"]] = relationship(back_populates="company")
 
