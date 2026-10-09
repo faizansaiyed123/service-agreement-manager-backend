@@ -6,15 +6,16 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from app.api import auth, companies, customers
+from app.api import assets, auth, companies, customers
 from app.core.config import get_settings
 from app.core.errors import install_error_handlers
 from app.db.session import engine
 
 settings = get_settings()
-logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO),
-                    format="%(asctime)s %(levelname)s %(name)s %(message)s")
-logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=getattr(logging, settings.log_level.upper(), logging.INFO),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
 
 
 @asynccontextmanager
@@ -23,9 +24,11 @@ async def lifespan(_: FastAPI):
     engine.dispose()
 
 
-app = FastAPI(title=settings.app_name, version="0.1.0", debug=settings.debug, lifespan=lifespan)
+app = FastAPI(title=settings.app_name, version="0.2.0", debug=settings.debug, lifespan=lifespan)
 app.add_middleware(
-    CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True,
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
 )
@@ -61,3 +64,5 @@ def root() -> dict[str, str]:
 app.include_router(auth.router, prefix=settings.api_v1_prefix)
 app.include_router(companies.router, prefix=settings.api_v1_prefix)
 app.include_router(customers.router, prefix=settings.api_v1_prefix)
+app.include_router(assets.equipment_router, prefix=settings.api_v1_prefix)
+app.include_router(assets.catalog_router, prefix=settings.api_v1_prefix)
