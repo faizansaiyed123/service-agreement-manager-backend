@@ -1,16 +1,16 @@
 # Roadmap
 
-Feature states: PLANNED, IN_PROGRESS, IMPLEMENTED, TESTING, VERIFIED, COMMITTED, PUSHED, BLOCKED.
+States: PLANNED, IN_PROGRESS, IMPLEMENTED, TESTING, VERIFIED, COMMITTED, PUSHED, BLOCKED.
 
-1. Backend foundation, identity and CRM — VERIFIED by the current GitHub Actions suite; PostgreSQL/Docker verification remains pending.
-2. Equipment and service catalog — VERIFIED by GitHub Actions; PostgreSQL migration execution remains pending.
-3. Agreement lifecycle, immutable proposal snapshots, acceptance evidence, explicit status transitions and audit history — IN_PROGRESS until current CI completes.
-4. Agreement amendments, template versioning, automatic expiration and renewal workflows — PLANNED.
-5. Maintenance schedules, idempotent work-order generation, dispatch and technician workflow — PLANNED.
-6. Invoicing, immutable issued invoices, payment ledger and reconciliation — PLANNED.
-7. Notifications/outbox, retry policy and provider adapters — PLANNED.
-8. Reporting/export and operational metrics — PLANNED.
-9. Integrations, webhook delivery, imports, idempotency and reconciliation — PLANNED.
-10. End-to-end regression, security review, PostgreSQL migration tests, Docker runbook and backend completion review — PLANNED.
+1. Backend foundation, identity and CRM — previously green in GitHub Actions; PostgreSQL/Docker verification pending.
+2. Equipment and service catalog — previously green in GitHub Actions; PostgreSQL migration execution pending.
+3. Agreement lifecycle, snapshots, acceptance and audit history — green in GitHub Actions; PostgreSQL verification pending.
+4. Team administration and server-side session revocation — included in the current CI scope.
+5. Maintenance schedules and retry-safe work-order generation — included in the current CI scope.
+6. Work-order dispatch, technician assignment, completion checklists and service history — included in the current CI scope.
+7. Invoicing, immutable issued invoices, payment ledger, balance calculations and reconciliation — PLANNED.
+8. Renewals, cancellation policy, durable notification/outbox processing — PLANNED.
+9. Reporting/exports and integrations/webhooks/imports — PLANNED.
+10. End-to-end regression, PostgreSQL migrations, Docker, security, performance and final completion review — PLANNED.
 
-Dependencies: identity/company isolation precedes every domain. Customers and locations precede equipment and agreements. Agreements precede maintenance and recurring billing. Work orders feed service history and invoicing. Outbox supports durable notifications and integrations; implemented domains feed reporting.
+Dependencies: identity and tenant boundaries precede all modules; customers/locations precede equipment, agreements and jobs; agreements may drive maintenance and recurring billing; work-order completion feeds service history and billing; outbox supports resilient notifications and integrations.

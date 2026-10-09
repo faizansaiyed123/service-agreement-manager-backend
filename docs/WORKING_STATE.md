@@ -1,8 +1,8 @@
 # Working state
 
-- Active task: tenant-scoped user administration and session invalidation.
-- Acceptance: owners/admins can create staff; only owners can grant owner/admin; user list/get is tenant scoped; password reset revokes active sessions; logout immediately invalidates access and refresh tokens.
-- Current change: user router/schema/tests, auth dependency session check, main router registration, progress and recovery state.
-- Verified agreement run: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/37959977883.
-- PostgreSQL/Alembic live migration, Docker runtime and concurrent behavior are not yet verified.
-- Next safe action: inspect CI for this commit, fix issues, then continue to maintenance scheduling and work orders.
+- Active task: maintenance schedule generation and work-order dispatch.
+- Acceptance: schedule and work orders are tenant-scoped; customer/location/equipment/agreement references are verified; repeated generation of a schedule occurrence returns the existing work order; sequence identifiers are allocated from the company counter; only valid state transitions are accepted; only active company technicians can be assigned; technicians can work only their assignments; required checklist items must be completed before closeout.
+- Current change adds operations models/schemas/routes, migration 0004, company work-order sequence counter, tests, and project checkpoints.
+- CI scope includes the immediately preceding user-management/session changes; inspect the newest run after push and fix any failure before marking verified.
+- PostgreSQL migration/concurrency tests and Docker runtime remain unverified.
+- Next safe action: check CI output, fix issues, then implement billing.
