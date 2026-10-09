@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from uuid import UUID
 
 import jwt
@@ -8,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.errors import DomainError
 from app.core.security import decode_token
 from app.db.session import get_db
-from app.models import Company, User
+from app.models import AuthSession, Company, User
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -25,14 +26,23 @@ def get_current_user(
             raise ValueError("wrong token type")
         user_id = UUID(str(claims["sub"]))
         company_id = UUID(str(claims["company_id"]))
+        session_id = UUID(str(claims["sid"]))
     except (jwt.PyJWTError, ValueError, KeyError, TypeError):
         raise DomainError(401, "invalid_token", "The access token is invalid or expired") from None
+    session = db.get(AuthSession, session_id)
+    if session is None or session.user_id != user_id or session.revoked_at is not None:
+        raise DomainError(401, "invalid_session", "The user session is no longer valid")
+    session_expiry = session.expires_at
+    if session_expiry.tzinfo is None:
+        session_expiry = session_expiry.replace(tzinfo=UTC)
+    if session_expiry <= datetime.now(UTC):
+        raise DomainError(401, "invalid_session", "The user session has expired")
     user = db.get(User, user_id)
     if user is None or not user.is_active or user.company_id != company_id:
         raise DomainError(401, "invalid_session", "The user session is no longer valid")
     company = db.get(Company, company_id)
     if company is None or not company.is_active:
-        raise DomainError(403, "company_inactive", "This company account is inactive")
+        raise DomainError(403, "company_inactive", "Company account is inactive")
     return user
 
 

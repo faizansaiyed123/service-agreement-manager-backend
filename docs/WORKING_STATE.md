@@ -1,9 +1,8 @@
 # Working state
 
-- Active task: Agreement lifecycle vertical slice.
-- Acceptance: tenant-scoped agreements; verified customer/location ownership; Decimal/Numeric pricing; price snapshots; draft-only editing; conflict responses for invalid transitions; acceptance evidence; version and event persistence; regression tests.
-- Files in this slice: agreement models/schemas/API, Alembic revision 0003, app/model registration, tests, roadmap/progress/context.
-- Migration: 0003_agreements depends on 0002_assets_catalog; PostgreSQL execution remains to be verified.
-- Checks: current GitHub Actions run will execute Ruff and Pytest after the push.
-- No local working tree or live PostgreSQL session is attached to the GitHub connector; source writes are made through the Git database API.
-- Next safe action: inspect CI on this commit and fix any failing check before proceeding to maintenance scheduling.
+- Active task: tenant-scoped user administration and session invalidation.
+- Acceptance: owners/admins can create staff; only owners can grant owner/admin; user list/get is tenant scoped; password reset revokes active sessions; logout immediately invalidates access and refresh tokens.
+- Current change: user router/schema/tests, auth dependency session check, main router registration, progress and recovery state.
+- Verified agreement run: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/37959977883.
+- PostgreSQL/Alembic live migration, Docker runtime and concurrent behavior are not yet verified.
+- Next safe action: inspect CI for this commit, fix issues, then continue to maintenance scheduling and work orders.
