@@ -3,10 +3,11 @@ from uuid import UUID
 from sqlalchemy import Boolean, ForeignKey, String, Text, Uuid, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.db.base import Base
 from app.models.base import Timestamped, UUIDPrimaryKey
 
 
-class Customer(UUIDPrimaryKey, Timestamped):
+class Customer(Base, UUIDPrimaryKey, Timestamped):
     __tablename__ = "customers"
     __table_args__ = (UniqueConstraint("company_id", "customer_number", name="customer_company_number"),)
     company_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -21,7 +22,7 @@ class Customer(UUIDPrimaryKey, Timestamped):
     service_locations: Mapped[list["ServiceLocation"]] = relationship(back_populates="customer", cascade="all, delete-orphan")
 
 
-class Contact(UUIDPrimaryKey, Timestamped):
+class Contact(Base, UUIDPrimaryKey, Timestamped):
     __tablename__ = "contacts"
     company_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True)
     customer_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -32,7 +33,7 @@ class Contact(UUIDPrimaryKey, Timestamped):
     customer: Mapped[Customer] = relationship(back_populates="contacts")
 
 
-class ServiceLocation(UUIDPrimaryKey, Timestamped):
+class ServiceLocation(Base, UUIDPrimaryKey, Timestamped):
     __tablename__ = "service_locations"
     company_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True)
     customer_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
