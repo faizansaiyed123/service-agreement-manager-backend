@@ -28,7 +28,7 @@ def scoped_agreement(db: Session, company_id: UUID, agreement_id: UUID) -> Agree
 def add_event(db: Session, agreement: Agreement, actor_id: UUID, event_type: str, from_status: str | None = None, detail: dict | None = None) -> None:
     db.add(AgreementEvent(
         agreement_id=agreement.id, actor_user_id=actor_id, event_type=event_type,
-        from_status=from_status, to_status=agreement.status, detail=detail,
+        from_status=from_status, to_status=agreement.status, detail=detail, created_at=datetime.now(UTC),
     ))
 
 
