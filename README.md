@@ -2,30 +2,28 @@
 
 Backend API for HVAC, plumbing, and related-trade service businesses.
 
-## Status
+## Current status
 
-Initial repository bootstrap. Implementation status is tracked in `docs/PROGRESS.md`; do not treat planned features as implemented.
+The first committed slice implements FastAPI infrastructure, company onboarding, authentication/session rotation, company-profile settings, customers, contacts, and service locations. Remaining business modules are tracked in docs/ROADMAP.md; do not treat planned features as complete.
 
-## Intended stack
+## Stack
 
 - Python 3.12, FastAPI, Pydantic v2
 - SQLAlchemy 2.x, PostgreSQL, Alembic
-- pytest, HTTPX, Ruff, mypy
-- Docker Compose for local development
+- pytest, HTTPX, Ruff
+- Docker Compose and GitHub Actions
 
 ## Local development
 
-Copy `.env.example` to `.env`, then start the stack:
+Copy .env.example to .env and replace the development JWT secret. Then run:
 
-```sh
-cp .env.example .env
-docker compose up --build -d
-docker compose exec api alembic upgrade head
-docker compose exec api pytest
-```
+    docker compose up --build -d
+    docker compose exec api alembic current
+    docker compose exec api pytest
+    docker compose exec api ruff check .
 
-API docs: http://localhost:8000/docs  
+Swagger UI: http://localhost:8000/docs  
 Liveness: http://localhost:8000/health/live  
 Readiness: http://localhost:8000/health/ready
 
-Never use development secrets in production. See `docs/PROJECT_CONTEXT.md` and `docs/RECOVERY.md`.
+Never use development credentials in production. Read docs/PROJECT_CONTEXT.md and docs/RECOVERY.md.
