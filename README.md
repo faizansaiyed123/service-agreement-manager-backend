@@ -1,29 +1,34 @@
 # Service Agreement Manager Backend
 
-Backend API for HVAC, plumbing, and related-trade service businesses.
-
-## Current status
-
-The first committed slice implements FastAPI infrastructure, company onboarding, authentication/session rotation, company-profile settings, customers, contacts, and service locations. Remaining business modules are tracked in docs/ROADMAP.md; do not treat planned features as complete.
+Backend API for HVAC, plumbing and related-trade service businesses.
 
 ## Stack
-
-- Python 3.12, FastAPI, Pydantic v2
-- SQLAlchemy 2.x, PostgreSQL, Alembic
-- pytest, HTTPX, Ruff
-- Docker Compose and GitHub Actions
+- Python 3.12, FastAPI and Pydantic v2
+- SQLAlchemy 2.x, PostgreSQL and Alembic
+- Pytest, HTTPX, Ruff and GitHub Actions
+- Docker Compose for local development
 
 ## Local development
+Copy `.env.example` to `.env`, then start the stack:
 
-Copy .env.example to .env and replace the development JWT secret. Then run:
+```sh
+docker compose up --build -d
+docker compose exec api alembic upgrade head
+docker compose exec api pytest
+```
 
-    docker compose up --build -d
-    docker compose exec api alembic current
-    docker compose exec api pytest
-    docker compose exec api ruff check .
-
-Swagger UI: http://localhost:8000/docs  
+OpenAPI / Swagger: http://localhost:8000/docs  
 Liveness: http://localhost:8000/health/live  
 Readiness: http://localhost:8000/health/ready
 
-Never use development credentials in production. Read docs/PROJECT_CONTEXT.md and docs/RECOVERY.md.
+## API modules
+- Authentication and session lifecycle: `/api/v1/auth`
+- Organization profile: `/api/v1/companies/current`
+- Customers, contacts and service locations: `/api/v1/customers`
+- Equipment: `/api/v1/equipment`
+- Service catalog: `/api/v1/service-catalog`
+- Agreement lifecycle, versions and events: `/api/v1/agreements`
+
+Agreement API supports drafts, proposal snapshots, acceptance evidence, delayed activation, suspension/resumption, cancellation, version history and event history. The implementation is ongoing: check `docs/PROGRESS.md` and GitHub Actions before relying on production readiness.
+
+Never use development secrets in production. Copy placeholders only and replace them with secure values.

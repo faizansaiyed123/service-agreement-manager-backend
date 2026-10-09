@@ -1,23 +1,21 @@
 # Progress
 
 ## Current milestone
-Initial backend foundation and identity/CRM vertical slice.
+Agreement lifecycle vertical slice, following committed identity/CRM and equipment/catalog APIs.
 
-## Commits
-- README bootstrap: 1803db01f604036bc4c656360986aa8cf721ad1e
-- Runtime/development setup: aa810134b05e207a318ef32f5b364886508e230f
-- App configuration/database core: 3c3bbfa7d08ccb9ba46cdcb53da1981796d00fde
-- Organization and CRM data models: c5fbc377823e4a11db77e7ab818d92263e968780
-- Authentication API: f955a49ac801ede5ad5835b61f5a653f497f1e79
-- Company/customer APIs and initial migration: 83830f5a5c45a9bcd36407f8ad370114b1a46923
+## Completed and verified prior state
+The latest pre-agreement GitHub Actions run passed for commit 44ba3adc8420e4e35224c8b42b8c14496b3a2c15: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/37954825817
 
-## Implemented in source, not yet verified
-- FastAPI app, environment settings, liveness/readiness, CORS and request IDs.
-- PostgreSQL SQLAlchemy configuration and explicit initial Alembic migration.
-- Company registration, login, Argon2 password hashing, refresh rotation, logout and /me.
-- Current company read/update; customer CRUD/search/pagination, contacts and service locations.
-- Docker Compose, CI and initial tests.
-- Durable project recovery documentation.
+## Agreement slice included in current commit
+- Agreement draft create/list/read/update with company-scoped customer and service-location checks.
+- Catalog-backed and custom agreement lines, with Decimal/Numeric totals and snapshotted catalog pricing.
+- Immutable version snapshot when proposed; customer acceptance evidence.
+- Explicit activate/suspend/resume/cancel transitions with conflicts for invalid transitions.
+- Historical event log and version history API.
+- Alembic 0003 migration and regression tests for tenant isolation, state transitions and price snapshots.
 
 ## Verification
-GitHub Actions result is pending inspection. PostgreSQL migration, live readiness, Docker startup and concurrency behavior have not been verified in a running environment.
+The current agreement commit awaits GitHub Actions. SQLite-backed API tests do not replace PostgreSQL migration or concurrency testing. Docker startup and production deployment are not yet verified.
+
+## Next
+Inspect the CI result for the agreement commit, fix actual failures, then build maintenance schedules and retry-safe work-order generation.
