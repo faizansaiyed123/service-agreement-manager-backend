@@ -1,7 +1,7 @@
 from datetime import date, time
 from uuid import UUID
 
-from sqlalchemy import Boolean, CheckConstraint, Date, ForeignKey, String, Text, Time, UniqueConstraint, Uuid
+from sqlalchemy import Boolean, CheckConstraint, Date, ForeignKey, Index, String, Text, Time, UniqueConstraint, Uuid, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -13,6 +13,13 @@ class CompanyBranch(Base, UUIDPrimaryKey, Timestamped):
     __table_args__ = (
         UniqueConstraint("company_id", "code", name="company_branch_code"),
         CheckConstraint("length(code) > 0", name="nonempty_code"),
+        Index(
+            "uq_company_branches_single_primary",
+            "company_id",
+            unique=True,
+            postgresql_where=text("is_primary"),
+            sqlite_where=text("is_primary"),
+        ),
     )
 
     company_id: Mapped[UUID] = mapped_column(
