@@ -37,4 +37,6 @@ jobs:
         run: alembic upgrade head
       - name: Verify PostgreSQL migration revision
         run: alembic current
+      - name: Verify ORM and database schema are in sync
+        run: alembic check
       - run: pytest
