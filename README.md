@@ -34,7 +34,13 @@ Readiness: http://localhost:8000/health/ready
 - Operational reports: `/api/v1/reports`
 - CSV exports: `/api/v1/exports/customers.csv`, `invoices.csv`, `work-orders.csv`, `agreements.csv`
 
-The notification worker can be run with `python -m app.workers.notifications` in an environment where SMTP settings are configured. The maintenance scheduler can be run with `python -m app.workers.maintenance`; it processes due schedules in bounded batches, records generation failures, and prevents duplicate occurrences. Password recovery uses `PASSWORD_RESET_URL`, expiring hashed tokens and the email outbox; reset records are hidden from ordinary notification API reads. SMTP delivery has not been verified without an actual provider. No automatic recurring invoices are generated until agreement total-vs-installment pricing is explicitly defined.
+Docker Compose starts the maintenance worker with the API and database. To run the email worker as well, configure `SMTP_HOST`, `SMTP_FROM_EMAIL`, and any required credentials, then start the email profile:
+
+```sh
+docker compose --profile email up --build -d
+```
+
+The maintenance worker processes due schedules in bounded batches, records generation failures, and prevents duplicate occurrences. Password recovery uses `PASSWORD_RESET_URL`, expiring hashed tokens and the email outbox; reset records are hidden from ordinary notification API reads. SMTP delivery has not been verified without an actual provider. No automatic recurring invoices are generated until agreement total-vs-installment pricing is explicitly defined.
 
 ## Verification
 GitHub Actions runs Ruff and Pytest and applies all Alembic migrations against a PostgreSQL 16 service. API tests currently use SQLite for speed; the migration step itself runs against PostgreSQL. Local setup success and production readiness should be verified in the target environment.
