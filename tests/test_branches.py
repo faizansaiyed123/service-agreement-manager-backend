@@ -47,6 +47,12 @@ def test_branch_crud_primary_and_tenant_isolation(client):
     first_after = client.get(f"/api/v1/branches/{branch_id}", headers=headers).json()
     assert first_after["is_primary"] is False
 
+    third = make_branch(client, headers, "EAST", name="East Office", is_primary=True)
+    assert third.status_code == 201, third.text
+    assert third.json()["is_primary"] is True
+    second_after = client.get(f"/api/v1/branches/{second.json()['id']}", headers=headers).json()
+    assert second_after["is_primary"] is False
+
     duplicate = make_branch(client, headers, "west", name="Duplicate Code")
     assert duplicate.status_code == 409
     invalid_timezone = make_branch(client, headers, "BADTZ", name="Invalid Time Zone", timezone="Mars/Olympus")
