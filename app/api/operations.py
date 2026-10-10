@@ -9,7 +9,7 @@ from app.api.deps import get_current_user, require_roles
 from app.core.errors import DomainError
 from app.db.session import get_db
 from app.models import MaintenanceSchedule, User, WorkOrder, WorkOrderEvent
-from app.services.maintenance import add_order_event, create_work_order_number, generate_scheduled_occurrence, next_occurrence, validate_context
+from app.services.maintenance import add_order_event, create_work_order_number, generate_scheduled_occurrence, validate_context
 from app.operations_schemas import AssignTechnician, CancelWorkOrder, GenerateOccurrence, ScheduleCreate, ScheduleRead, ScheduleUpdate, WorkOrderCompletion, WorkOrderCreate, WorkOrderEventRead, WorkOrderRead, WorkOrderUpdate
 
 schedules_router = APIRouter(prefix="/maintenance/schedules", tags=["maintenance"])
