@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     notification_poll_seconds: int = 5
     notification_lease_seconds: int = 60
     notification_default_max_attempts: int = 5
+    password_reset_token_minutes: int = 30
+    password_reset_cooldown_seconds: int = 60
+    password_reset_url: str = "http://localhost:3000/reset-password"
 
     def validate_production(self) -> None:
         if len(self.jwt_secret_key) < 32:
