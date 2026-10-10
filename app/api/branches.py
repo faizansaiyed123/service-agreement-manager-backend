@@ -168,16 +168,24 @@ def update_branch(
         raise DomainError(409, "branch_code_already_exists", "A branch with this code already exists")
     requested_primary = values.pop("is_primary", None)
     active_value = values.get("is_active", branch.is_active)
+    was_primary = branch.is_primary
     if requested_primary is True and not active_value:
         raise DomainError(422, "inactive_primary_branch", "An inactive branch cannot be the primary branch")
     for key, value in values.items():
         setattr(branch, key, value)
     if requested_primary is True:
         promote_primary(db, user.company_id, branch)
-    elif requested_primary is False:
+    elif was_primary and (requested_primary is False or values.get("is_active") is False):
         branch.is_primary = False
-    elif values.get("is_active") is False:
-        branch.is_primary = False
+        sibling = db.scalar(select(CompanyBranch).where(
+            CompanyBranch.company_id == user.company_id,
+            CompanyBranch.id != branch.id,
+            CompanyBranch.is_active.is_(True),
+        ).order_by(CompanyBranch.name, CompanyBranch.id).with_for_update().limit(1))
+        if sibling is not None:
+            promote_primary(db, user.company_id, sibling)
+        elif branch.is_active:
+            raise DomainError(409, "primary_branch_required", "The only active branch cannot give up primary status")
     try:
         db.commit()
     except IntegrityError:
