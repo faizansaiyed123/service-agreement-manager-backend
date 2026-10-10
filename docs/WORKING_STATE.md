@@ -1,10 +1,10 @@
 # Working state
 
-- Latest code milestone: production settings + Docker Compose workers + Compose smoke CI.
-- Last main API test/migration/drift checks passed in GitHub Actions run https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38020974685.
-- The Compose smoke job on that run successfully built and started PostgreSQL, API, maintenance-worker and notification-worker, then passed the /health/ready check. Container teardown was still completing at checkpoint time.
-- CORS settings now accept both JSON arrays and the existing comma-separated sample format; the Docker failure revealed Pydantic was trying to JSON-decode the CSV-style setting.
-- Production settings require a long unique JWT secret, non-debug mode, SMTP host/from address, STARTTLS, matching SMTP credentials and a public HTTPS password reset page URL.
-- Docker Compose always starts the maintenance worker. Email delivery worker is opt-in via the email profile, since it needs actual SMTP config.
-- Next feature: company branch/location and business-hours management. Keep it modular with tenant-scoped CRUD, time-zone aware business hours, DB migration and focused tests.
-- Unverified: real SMTP inbox delivery, multi-process PostgreSQL concurrency/race tests, actual deployment/TLS/secrets/monitoring, attachments, import/webhooks, tax/discount/refund/PDF/SMS and recurring invoices.
+- Current verified feature slice: company branches, business hours and closures.
+- CI run: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38021794812. Ruff, PostgreSQL 16 upgrade through migration 0012, Alembic current/drift check, and pytest passed. Compose smoke built/started PostgreSQL + API + maintenance worker + opt-in email worker and passed /health/ready. The run was still finishing teardown at the time of last inspection.
+- Migrations now end at revision 0012_primary_branch.
+- Branch API: GET/POST /api/v1/branches, GET/PATCH /api/v1/branches/{id}, GET/PUT /api/v1/branches/{id}/business-hours, GET/POST /api/v1/branches/{id}/closures and DELETE the closure by ID.
+- Branch hours are local wall-clock times in the branch's IANA timezone; weekdays are Monday=0 to Sunday=6; each weekly replacement must include each day exactly once; closed days have no times; closures apply for a full calendar day.
+- Primary promotion locks the company, flushes the prior primary false before setting a new one true, and a partial unique index prevents more than one primary branch per company.
+- Next feature: idempotent customer CSV bulk import with dry-run/preview, row-level validation and errors, tenant-scoped idempotency, bounded size and durable result summary.
+- Known unverified areas: real SMTP provider delivery, dedicated cross-process PostgreSQL payment/schedule race tests, production deployment/TLS/secrets/monitoring, attachments, webhooks, tax/discount/refund/PDF/SMS and recurring invoices.
