@@ -110,7 +110,9 @@ def test_recovery_rejects_expired_or_unknown_tokens(client):
             PasswordResetToken.token_hash.is_not(None)
         ))
         assert item is not None
-        item.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        now = datetime.now(UTC)
+        item.created_at = now - timedelta(hours=1)
+        item.expires_at = now - timedelta(seconds=1)
         db.commit()
     finally:
         db.close()
