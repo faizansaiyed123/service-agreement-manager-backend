@@ -1,7 +1,7 @@
 # Working state
 
-- Active task: SMTP notification outbox worker.
-- Notification schema and tenant-scoped API are already committed to main.
-- Current files add app/workers/notifications.py and update progress/recovery notes.
-- Worker claims queued/due rows under row locks and a lease, persists attempt numbers, uses SMTP configured by env, retries with bounded backoff, and moves exhausted sends to dead-letter status.
-- No SMTP credentials were available; next commit must add fake-sender tests before this feature is considered verified.
+- Active task: notification API/worker regression tests.
+- Worker implementation is committed in app/workers/notifications.py; API is /api/v1/notifications.
+- Tests cover enqueue idempotency, payload mismatch, tenant isolation, successful fake delivery, bounded retry exhaustion, manual retry, and future scheduling.
+- CI will determine verification status. SMTP credentials are not available, so no live email was sent.
+- Next safe action after CI: fix any failures, then implement reporting/CSV export APIs.
