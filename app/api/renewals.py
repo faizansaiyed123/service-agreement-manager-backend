@@ -163,6 +163,7 @@ def create_renewal_offer(
 
 @router.get("", response_model=list[RenewalOfferRead])
 def list_renewal_offers(
+    agreement_id: UUID,
     status: str | None = Query(default=None, pattern="^(offered|accepted|declined|expired|cancelled)$"),
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
