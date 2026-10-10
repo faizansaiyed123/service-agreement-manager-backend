@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint, Uuid, func
+from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, JSON, Numeric, String, Text, UniqueConstraint, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -75,5 +75,5 @@ class InvoiceEvent(Base, UUIDPrimaryKey):
     event_type: Mapped[str] = mapped_column(String(60), nullable=False)
     from_status: Mapped[str | None] = mapped_column(String(24))
     to_status: Mapped[str | None] = mapped_column(String(24))
-    detail: Mapped[dict | None] = mapped_column(__import__("sqlalchemy").JSON)
+    detail: Mapped[dict | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
