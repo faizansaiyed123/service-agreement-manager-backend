@@ -257,7 +257,7 @@ def void_invoice(
     return invoice_response(db, get_invoice(db, user.company_id, invoice.id))
 
 
-@router.post("/{invoice_id}/payments", response_model=PaymentRead)
+@router.post("/{invoice_id}/payments", response_model=PaymentRead, status_code=201)
 def record_payment(
     invoice_id: UUID, payload: PaymentCreate, response: Response,
     idempotency_key: str = Header(alias="Idempotency-Key", min_length=8, max_length=128),
