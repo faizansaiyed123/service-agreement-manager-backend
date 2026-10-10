@@ -1,6 +1,5 @@
 from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qs, urlsplit
-from uuid import UUID
 
 from conftest import TestingSession
 from sqlalchemy import func, select
