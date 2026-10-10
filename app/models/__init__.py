@@ -5,9 +5,10 @@ from app.models.billing import Invoice, InvoiceEvent, InvoiceLine, Payment
 from app.models.identity import AuthSession, Company, User
 from app.models.operations import MaintenanceSchedule, WorkOrder, WorkOrderEvent
 from app.models.renewals import AgreementRenewal
+from app.models.notifications import NotificationAttempt, NotificationOutbox
 
 __all__ = [
     "Agreement", "AgreementEvent", "AgreementLine", "AgreementVersion", "AuthSession",
     "Company", "Contact", "Customer", "Equipment", "Invoice", "InvoiceEvent", "InvoiceLine",
-    "MaintenanceSchedule", "Payment", "ServiceCatalogItem", "ServiceLocation", "User", "WorkOrder", "WorkOrderEvent", "AgreementRenewal",
+    "MaintenanceSchedule", "NotificationAttempt", "NotificationOutbox", "Payment", "ServiceCatalogItem", "ServiceLocation", "User", "WorkOrder", "WorkOrderEvent", "AgreementRenewal",
 ]

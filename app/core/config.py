@@ -15,6 +15,16 @@ class Settings(BaseSettings):
     refresh_token_days: int = 14
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
     log_level: str = "INFO"
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_from_email: str | None = None
+    smtp_starttls: bool = True
+    smtp_timeout_seconds: int = 10
+    notification_poll_seconds: int = 5
+    notification_lease_seconds: int = 60
+    notification_default_max_attempts: int = 5
 
     def validate_production(self) -> None:
         if len(self.jwt_secret_key) < 32:

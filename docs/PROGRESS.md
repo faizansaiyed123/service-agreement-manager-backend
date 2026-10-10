@@ -1,19 +1,17 @@
 # Progress
 
 ## Current milestone
-Agreement renewal offer lifecycle.
+Durable notification outbox schema.
 
-## Verified prior feature runs
-- Maintenance/user suite: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38016919388 (success).
-- Billing schemas: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38017135881 (success).
-- Billing API and payment idempotency: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38017375683 (success).
-- Renewal persistence schema: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38017492987 (success).
+## Verified prior API slices
+- Maintenance/user tests: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38016919388 (success).
+- Billing schema: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38017135881 (success).
+- Billing API/payment idempotency: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38017375683 (success).
+- Renewal schema: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38017492987 (success).
+- Renewal API and explicit-list-path fix: see current main workflow for commit b465aed644026775aff0d188a15e9cee62f6f698.
 
-## Implemented in current commit
-Tenant-scoped renewal offer creation/listing, immutable terms and pricing snapshot, one-open-offer rule, expiry checks, explicit accept/decline/cancel transitions, successor agreement creation with acceptance evidence, price freeze, agreement version snapshot, and audit events.
+## Current schema chunk
+Adds email outbox state, company idempotency, scheduled delivery time, lease expiry, bounded attempt count and attempt history. SMTP connection settings are now environment-based. API/worker implementation follows in its own commit.
 
-## Verification
-CI initially caught a missing `agreement_id` function parameter in the nested list route; the parameter is now explicit and CI is rerunning. PostgreSQL migration execution, multi-process locking/concurrency tests, Docker runtime and production deployment are not verified.
-
-## Deferred
-Automatic sending of email/SMS, scheduled expiration workers, automatic renewal without explicit acceptance, and recurring invoice generation remain intentionally unimplemented until configured and verified.
+## Verification limitations
+A configured SMTP provider is required for actual delivery. SMS is not included in this slice. Live PostgreSQL migrations, SMTP integration and Docker runtime need environment-backed verification.
