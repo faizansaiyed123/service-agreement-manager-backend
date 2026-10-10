@@ -1,7 +1,8 @@
 # Working state
 
-- Active task: CSV export endpoints.
-- Routes: GET /api/v1/exports/customers.csv, invoices.csv, work-orders.csv, agreements.csv.
-- Acceptance: current company scope, filters/date validation, max 10,000 rows, CSV attachment response, formula injection mitigation for text cells, invoice paid/balance from payment ledger.
-- Current commit adds app/api/exports.py, test coverage, main registration and checkpoint docs.
-- CI finding: removed the unused UUID import in app/api/exports.py. Next safe action: verify the fresh Ruff/pytest run, then add PostgreSQL migration execution to GitHub Actions.
+- Active task: PostgreSQL migration verification in GitHub Actions.
+- CSV exports are pushed and their Ruff/pytest CI run passed.
+- Current change adds a PostgreSQL 16 service to CI, runs Alembic upgrade/current against that database, then runs Ruff and pytest.
+- Acceptance: fresh PostgreSQL starts healthy, all revisions 0001 through head apply, current revision is reported, Ruff and SQLite API tests stay green.
+- PostgreSQL migration status remains unverified until this new workflow succeeds.
+- Next safe action: inspect CI result and examine exact migration error logs if it fails; only after that add migration-drift checks or other features.

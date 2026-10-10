@@ -1,16 +1,18 @@
 # Progress
 
 ## Current milestone
-Tenant-scoped CSV exports.
+PostgreSQL-backed migration verification in CI.
 
-## Verified prior feature runs
-- Notifications API: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38018132338 (success).
-- Notification worker: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38018252622 (success).
+## Verified feature CI
+- Maintenance/user suite: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38016919388 (success).
+- Billing API/idempotency: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38017375683 (success).
+- Renewal API: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38017709123 (success).
 - Notification worker tests: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38018304748 (success).
-- Operational reports: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38018460376 (success).
+- Reports API: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38018460376 (success).
+- CSV export API: CI passed after removing one unused import; latest run: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38018628359 (success).
 
 ## Current change
-Adds CSV exports for customers, invoices, work orders and agreements. Exports use tenant filtering, filter/range validation, bounded pagination and spreadsheet-formula neutralization on string cells. Invoice export derives amount paid from the payment ledger and calculates outstanding balance.
+CI now starts PostgreSQL 16, runs `alembic upgrade head` and `alembic current`, then Ruff and SQLite-backed API tests. This is the first automated real-PostgreSQL migration test in the project.
 
-## Verification
-The first export CI run stopped at Ruff due to one unused UUID import; it has been removed in this follow-up. Pytest has not yet run for the export change. PostgreSQL migrations have not yet been applied to a live PostgreSQL instance; a PostgreSQL-backed CI migration job is the next infrastructure step.
+## Remaining verification limits
+The new PostgreSQL CI job itself must pass before its migration verification is called green. Live SMTP delivery and production Docker/deployment/monitoring remain unverified.

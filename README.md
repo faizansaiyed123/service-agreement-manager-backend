@@ -15,6 +15,7 @@ Copy `.env.example` to `.env`, then start the stack:
 docker compose up --build -d
 docker compose exec api alembic upgrade head
 docker compose exec api pytest
+docker compose exec api ruff check .
 ```
 
 OpenAPI / Swagger: http://localhost:8000/docs  
@@ -22,13 +23,20 @@ Liveness: http://localhost:8000/health/live
 Readiness: http://localhost:8000/health/ready
 
 ## API modules
-- Authentication and session lifecycle: `/api/v1/auth`
-- Organization profile: `/api/v1/companies/current`
+- Authentication and sessions: `/api/v1/auth`
+- Company profile and users: `/api/v1/companies/current`, `/api/v1/users`
 - Customers, contacts and service locations: `/api/v1/customers`
-- Equipment: `/api/v1/equipment`
-- Service catalog: `/api/v1/service-catalog`
-- Agreement lifecycle, versions and events: `/api/v1/agreements`
+- Equipment and catalog: `/api/v1/equipment`, `/api/v1/service-catalog`
+- Agreements and renewal offers: `/api/v1/agreements`
+- Maintenance schedules and work orders: `/api/v1/maintenance/schedules`, `/api/v1/work-orders`
+- Invoices and payments: `/api/v1/invoices`
+- Notification outbox: `/api/v1/notifications`
+- Operational reports: `/api/v1/reports`
+- CSV exports: `/api/v1/exports/customers.csv`, `invoices.csv`, `work-orders.csv`, `agreements.csv`
 
-Agreement API supports drafts, proposal snapshots, acceptance evidence, delayed activation, suspension/resumption, cancellation, version history and event history. The implementation is ongoing: check `docs/PROGRESS.md` and GitHub Actions before relying on production readiness.
+The notification worker can be run with `python -m app.workers.notifications` in an environment where SMTP settings are configured. SMTP delivery has not been verified without an actual provider. No automatic recurring invoices are generated until agreement total-vs-installment pricing is explicitly defined.
 
-Never use development secrets in production. Copy placeholders only and replace them with secure values.
+## Verification
+GitHub Actions runs Ruff and Pytest and applies all Alembic migrations against a PostgreSQL 16 service. API tests currently use SQLite for speed; the migration step itself runs against PostgreSQL. Local setup success and production readiness should be verified in the target environment.
+
+Never use development secrets in production.
