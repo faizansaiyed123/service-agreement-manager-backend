@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.errors import DomainError
-from app.models import Agreement, Company, Customer, Equipment, ServiceLocation, User, WorkOrder, WorkOrderEvent
+from app.models import Agreement, Company, Customer, Equipment, ServiceLocation, WorkOrder, WorkOrderEvent
 
 MONTHS = {"monthly": 1, "quarterly": 3, "semi_annual": 6, "annual": 12}
 
