@@ -1,8 +1,11 @@
+import json
 from functools import lru_cache
+from typing import Annotated
 from urllib.parse import urlsplit
 
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -15,7 +18,7 @@ class Settings(BaseSettings):
     jwt_secret_key: str = "unsafe-development-secret-change-this-please"
     access_token_minutes: int = 15
     refresh_token_days: int = 14
-    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
+    cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:3000", "http://localhost:5173"]
     log_level: str = "INFO"
     smtp_host: str | None = None
     smtp_port: int = Field(default=587, ge=1, le=65535)
@@ -30,6 +33,19 @@ class Settings(BaseSettings):
     password_reset_token_minutes: int = Field(default=30, ge=1, le=1440)
     password_reset_cooldown_seconds: int = Field(default=60, ge=0, le=86400)
     password_reset_url: str = "http://localhost:3000/reset-password"
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, value):
+        if isinstance(value, str):
+            stripped = value.strip()
+            if stripped.startswith("["):
+                parsed = json.loads(stripped)
+                if not isinstance(parsed, list):
+                    raise ValueError("CORS_ORIGINS must be a JSON array or comma-separated list")
+                return parsed
+            return [origin.strip() for origin in stripped.split(",") if origin.strip()]
+        return value
 
     def validate_production(self) -> None:
         if len(self.jwt_secret_key) < 32:
