@@ -27,5 +27,26 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+  maintenance-worker:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://sam:${POSTGRES_PASSWORD:-sam_dev_only}@db:5432/service_agreements
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    command: ["python", "-m", "app.workers.maintenance"]
+  notification-worker:
+    build: .
+    profiles: ["email"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://sam:${POSTGRES_PASSWORD:-sam_dev_only}@db:5432/service_agreements
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    command: ["python", "-m", "app.workers.notifications"]
 volumes:
   postgres_data:
