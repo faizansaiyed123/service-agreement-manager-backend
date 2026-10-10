@@ -95,7 +95,9 @@ def create_branch(
         CompanyBranch.is_primary.is_(True),
     )) is not None
     requested_primary = bool(values.pop("is_primary", False))
-    values["is_primary"] = requested_primary or not already_has_primary
+    # Keep the partial unique index valid while inserting; primary promotion
+    # happens only after the new row exists.
+    values["is_primary"] = not already_has_primary
     branch = CompanyBranch(company_id=user.company_id, **values)
     db.add(branch)
     db.flush()
@@ -111,7 +113,7 @@ def create_branch(
         )
         for day in range(7)
     ])
-    if branch.is_primary:
+    if requested_primary or branch.is_primary:
         promote_primary(db, user.company_id, branch)
     try:
         db.commit()
