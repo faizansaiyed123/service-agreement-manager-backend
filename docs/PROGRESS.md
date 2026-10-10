@@ -10,7 +10,7 @@ Schema drift detection in CI.
 - PostgreSQL 16 schema upgrade: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38018805647 (success). All Alembic migrations applied and `alembic current` succeeded.
 
 ## Current change
-Adds `alembic check` after applying migrations in the PostgreSQL CI job, to detect model/schema drift that previously wouldn't be caught by SQLite API tests or plain migration application.
+`alembic check` found a missing ORM-requested index on `agreements.service_location_id`. A new forward migration 0008 adds `ix_agreements_service_location_id`; prior applied migrations remain unchanged.
 
 ## Verification
-The drift-check step is awaiting its first run. PostgreSQL migration success is verified; schema drift check, production deployment and live SMTP remain pending until run/configured.
+The migration and drift-check rerun is pending. PostgreSQL migration up to 0007 previously succeeded; schema drift check, production deployment and live SMTP remain pending until verified.
