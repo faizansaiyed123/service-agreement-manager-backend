@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from app.api import agreements, assets, auth, billing, companies, customers, exports, notifications, operations, reports, renewals, users
+from app.api import agreements, assets, auth, billing, companies, customers, exports, notifications, operations, password_recovery, reports, renewals, users
 from app.core.config import get_settings
 from app.core.errors import install_error_handlers
 from app.db.session import engine
@@ -62,6 +62,7 @@ def root() -> dict[str, str]:
 
 
 app.include_router(auth.router, prefix=settings.api_v1_prefix)
+app.include_router(password_recovery.router, prefix=settings.api_v1_prefix)
 app.include_router(companies.router, prefix=settings.api_v1_prefix)
 app.include_router(customers.router, prefix=settings.api_v1_prefix)
 app.include_router(assets.equipment_router, prefix=settings.api_v1_prefix)
