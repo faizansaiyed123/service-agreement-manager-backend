@@ -62,6 +62,7 @@ def root() -> dict[str, str]:
 
 
 app.include_router(auth.router, prefix=settings.api_v1_prefix)
+app.include_router(branches.router, prefix=settings.api_v1_prefix)
 app.include_router(password_recovery.router, prefix=settings.api_v1_prefix)
 app.include_router(companies.router, prefix=settings.api_v1_prefix)
 app.include_router(customers.router, prefix=settings.api_v1_prefix)
