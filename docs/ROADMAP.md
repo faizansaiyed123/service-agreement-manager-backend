@@ -2,18 +2,19 @@
 
 States: PLANNED, IN_PROGRESS, IMPLEMENTED, TESTING, VERIFIED, COMMITTED, PUSHED, BLOCKED.
 
-1. Identity/company and CRM — CI green; tenant-scoped API regressions green.
+1. Identity/company, CRM and tenant isolation — CI green.
 2. Equipment and service catalog — CI green.
-3. Agreement lifecycle, snapshot pricing, acceptance and audit — CI green.
-4. Team administration and server-side session revocation — CI green.
-5. Maintenance schedules, work-order dispatch and automatic retry-safe schedule generation — VERIFIED by CI (run 38019681845).
-6. Invoice lifecycle, payment ledger, idempotency and receivables metrics — CI green.
-7. Renewal offer lifecycle — CI green.
-8. Email outbox and worker retry/dead-letter mechanics — fake-sender tests green; live SMTP provider is not configured.
-9. Operational reports and tenant-safe CSV exports — CI green.
-10. Self-service password change and account recovery — PLANNED.
-11. Service location/contact complete management, company branches/business hours, attachments and customer import/export jobs — PLANNED.
-12. SMS/email provider delivery verification, webhooks/integrations and external credential status — PLANNED.
-13. PostgreSQL concurrent worker/transaction tests, Docker runtime, production security/performance review — PLANNED.
+3. Agreement lifecycle, immutable price snapshots, acceptance and audit — CI green.
+4. Team administration, session revocation and self-service password change — CI green.
+5. Maintenance scheduling, automatic bounded catch-up worker and work-order dispatch — CI green; PostgreSQL multi-worker races need a dedicated integration test.
+6. Invoice lifecycle, immutable lines, idempotent payment ledger and receivables reports — CI green.
+7. Explicit agreement renewal offers — CI green.
+8. Notification outbox and retry/dead-letter worker — fake-sender tests green; real SMTP provider still unverified.
+9. Tenant-safe operational reports and CSV exports — CI green.
+10. Password recovery with hashed one-time expiring tokens, generic responses, cooldown, outbox delivery and session revocation — VERIFIED (CI run 38020480557).
+11. Production configuration validation and Docker Compose worker supervision — IN_PROGRESS.
+12. Attachment metadata/storage, company branch/business-hours administration and customer bulk imports — PLANNED.
+13. Webhooks/integration credential lifecycle and delivery retry — PLANNED.
+14. PostgreSQL concurrency, Docker end-to-end runtime, security/performance and final backend completion audit — PLANNED.
 
-Recurring invoice automation is intentionally deferred until agreement total-versus-installment semantics are explicit. Do not claim production readiness until live deployment checks complete.
+Automatic recurring billing remains deferred until agreement total-versus-installment semantics are explicitly defined. Production readiness is not claimed until deployed runtime and provider-backed email checks pass.
