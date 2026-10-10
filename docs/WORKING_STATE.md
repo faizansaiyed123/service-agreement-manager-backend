@@ -1,7 +1,7 @@
 # Working state
 
-- Active task: automatic preventive-maintenance worker.
-- Maintenance service layer is extracted and passing CI after removal of one unused import.
-- Current code adds app/workers/maintenance.py, ScheduleRead generation diagnostics, bounded catch-up, per-schedule savepoint/error isolation, work-order uniqueness recovery, worker tests and run instructions.
-- Worker test expectation: failed customer validation leaves schedule cursor unchanged and stores last_generation_error; success clears it and advances recurrence; future due dates are left unclaimed; backlog catch-up is limited per run.
-- Next action: check CI for actual Ruff, migration/drift, and pytest outcomes; fix any findings before declaring scheduler verified.
+- Last verified feature: recurring maintenance worker, commit 92c2e41e72787fc7d8370dea193448ebcfe34f41.
+- Verification run: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38019681845 — Ruff, PostgreSQL 16 migration upgrade, Alembic current, Alembic check, and pytest all passed.
+- Maintenance scheduler processes due schedules in bounded batches, catches up a bounded number of periods, records last attempt/error, preserves due date on validation failures, clears error after repair, and guards duplicate occurrences.
+- Active task: next bounded security slice is self-service password change and session invalidation. Password recovery via email should not be claimed until a token/delivery flow and tests exist.
+- PostgreSQL row-level concurrency and multi-worker stress tests remain outstanding.
