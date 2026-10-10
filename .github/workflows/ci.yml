@@ -40,3 +40,38 @@ jobs:
       - name: Verify ORM and database schema are in sync
         run: alembic check
       - run: pytest
+
+  compose-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare local environment
+        run: cp .env.example .env
+      - name: Start API and background workers
+        run: docker compose --profile email up --build --wait -d
+      - name: Verify database readiness through the API
+        run: |
+          python - <<'PY'
+          import time
+          import urllib.error
+          import urllib.request
+
+          url = "http://127.0.0.1:8000/health/ready"
+          last_error = None
+          for _ in range(30):
+              try:
+                  with urllib.request.urlopen(url, timeout=3) as response:
+                      if response.status == 200:
+                          print(response.read().decode())
+                          break
+              except (urllib.error.URLError, TimeoutError) as exc:
+                  last_error = exc
+                  time.sleep(2)
+          else:
+              raise SystemExit(f"API readiness check failed: {last_error}")
+          PY
+      - name: Show service status
+        run: docker compose --profile email ps
+      - name: Tear down containers
+        if: always()
+        run: docker compose --profile email down -v
