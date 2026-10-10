@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date
 
 
 def make_site(client, headers):
