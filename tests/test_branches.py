@@ -37,6 +37,9 @@ def test_branch_crud_primary_and_tenant_isolation(client):
     assert branch["timezone"] == "America/Chicago"
     assert branch["is_primary"] is True
     assert len(client.get(f"/api/v1/branches/{branch_id}/business-hours", headers=headers).json()) == 7
+    unprimary_only = client.patch(f"/api/v1/branches/{branch_id}", headers=headers, json={"is_primary": False})
+    assert unprimary_only.status_code == 409
+    assert client.get(f"/api/v1/branches/{branch_id}", headers=headers).json()["is_primary"] is True
 
     second = make_branch(client, headers, "WEST", name="West Office", city="Dallas")
     assert second.status_code == 201, second.text
@@ -52,6 +55,11 @@ def test_branch_crud_primary_and_tenant_isolation(client):
     assert third.json()["is_primary"] is True
     second_after = client.get(f"/api/v1/branches/{second.json()['id']}", headers=headers).json()
     assert second_after["is_primary"] is False
+
+    demoted = client.patch(f"/api/v1/branches/{third.json()['id']}", headers=headers, json={"is_primary": False})
+    assert demoted.status_code == 200, demoted.text
+    primaries = [item for item in client.get("/api/v1/branches", headers=headers).json() if item["is_primary"]]
+    assert len(primaries) == 1
 
     duplicate = make_branch(client, headers, "west", name="Duplicate Code")
     assert duplicate.status_code == 409
