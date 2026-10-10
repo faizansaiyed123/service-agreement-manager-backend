@@ -1,7 +1,7 @@
 # Working state
 
-- Active task: renewal offer persistence.
-- Current commit adds AgreementRenewal, migration 0006, exports it from app.models, and updates recovery checkpoints.
-- Next feature commit adds tenant-scoped offer/create/list/accept/decline APIs and tests.
-- Acceptance criteria: offer snapshots terms/prices; only authorized company staff can create/manage it; proposed term follows source agreement's end; accept creates a successor agreement using frozen offer prices and acceptance evidence; duplicate or expired acceptance is rejected; decline records reason; source and successor history remains intact.
-- PostgreSQL execution of migrations 0001–0006 remains to be run in a real PostgreSQL environment; CI SQLite tests alone do not verify migration compatibility.
+- Active task: agreement renewal offer API.
+- Current code: renewal schemas/routes, main registration, API workflow/tenant-isolation tests, progress checkpoint.
+- Acceptance criteria: offer requires currently active agreement and future successor term; snapshots all proposed terms and prices; only one open offer exists; accept creates a successor agreement from frozen offer data and records evidence; decline/cancel/expired offers cannot be accepted again; all routes are tenant-scoped.
+- Renewal schema migration 0006 has passed GitHub Actions Ruff/pytest import checks; actual PostgreSQL migration execution remains outstanding.
+- Next safe step: inspect the CI result for this API commit and fix findings before notifications/outbox work.

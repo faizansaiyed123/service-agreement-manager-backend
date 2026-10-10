@@ -1,18 +1,19 @@
 # Progress
 
 ## Current milestone
-Explicit agreement renewal offers.
+Agreement renewal offer lifecycle.
 
-## Verified feature runs
-- User and operations suite: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38016919388 (success).
-- Billing schema/lint slice: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38017135881 (success).
-- Billing API/idempotency suite: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38017375683 (success).
+## Verified prior feature runs
+- Maintenance/user suite: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38016919388 (success).
+- Billing schemas: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38017135881 (success).
+- Billing API and payment idempotency: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38017375683 (success).
+- Renewal persistence schema: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38017492987 (success).
 
-## Renewal schema committed in current slice
-An agreement renewal offer stores the proposed term dates, expiry date, immutable JSON pricing/terms snapshot, explicit status, acceptance evidence, and optional successor agreement link. API workflows are the next small feature commit.
+## Implemented in current commit
+Tenant-scoped renewal offer creation/listing, immutable terms and pricing snapshot, one-open-offer rule, expiry checks, explicit accept/decline/cancel transitions, successor agreement creation with acceptance evidence, price freeze, agreement version snapshot, and audit events.
 
-## Verification limitations
-The billing and renewal schema migrations are in history but have not yet been executed against a live PostgreSQL instance in this environment. CI tests currently use SQLite for API regression; PostgreSQL locking and production Docker remain unverified.
+## Verification
+Current renewal API tests await CI. PostgreSQL migration execution, multi-process locking/concurrency tests, Docker runtime and production deployment are not verified.
 
-## Product rules
-Do not renew automatically without explicit accepted terms. Agreement renewal will clone proposed price snapshots into a successor agreement only after acceptance. Automatic recurring billing remains deferred until pricing-period semantics are explicit.
+## Deferred
+Automatic sending of email/SMS, scheduled expiration workers, automatic renewal without explicit acceptance, and recurring invoice generation remain intentionally unimplemented until configured and verified.
