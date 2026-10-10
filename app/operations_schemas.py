@@ -54,6 +54,8 @@ class ScheduleRead(ORMModel):
     next_due_date: date
     checklist_template: list[str]
     is_active: bool
+    last_generation_attempt_at: datetime | None
+    last_generation_error: str | None
     created_at: datetime
     updated_at: datetime
 
