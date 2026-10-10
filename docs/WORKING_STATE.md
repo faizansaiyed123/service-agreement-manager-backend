@@ -1,8 +1,10 @@
 # Working state
 
-- Latest verified commit includes account recovery API, migration 0010 and recovery tests.
-- Verification run: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38020480557 — Ruff, PostgreSQL 16 migration upgrade, Alembic current/check and pytest all passed.
-- Routes: POST /api/v1/auth/forgot-password (generic 202 response) and POST /api/v1/auth/reset-password (single-use token, 204 success). Token hashes are persisted; raw tokens are sent only in the queued email and never returned via API.
-- Password-reset notification records are excluded from general notification listing, detail, attempts and retry APIs so their reset URLs cannot be retrieved by ordinary company users.
-- Current focus: validate production SMTP + HTTPS reset URL settings, and start both background workers in Docker Compose. No SMTP provider is configured here.
-- Known unverified work: actual provider email delivery, container lifecycle, PostgreSQL concurrent request races, attachment/object storage and external webhooks.
+- Latest code milestone: production settings + Docker Compose workers + Compose smoke CI.
+- Last main API test/migration/drift checks passed in GitHub Actions run https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38020974685.
+- The Compose smoke job on that run successfully built and started PostgreSQL, API, maintenance-worker and notification-worker, then passed the /health/ready check. Container teardown was still completing at checkpoint time.
+- CORS settings now accept both JSON arrays and the existing comma-separated sample format; the Docker failure revealed Pydantic was trying to JSON-decode the CSV-style setting.
+- Production settings require a long unique JWT secret, non-debug mode, SMTP host/from address, STARTTLS, matching SMTP credentials and a public HTTPS password reset page URL.
+- Docker Compose always starts the maintenance worker. Email delivery worker is opt-in via the email profile, since it needs actual SMTP config.
+- Next feature: company branch/location and business-hours management. Keep it modular with tenant-scoped CRUD, time-zone aware business hours, DB migration and focused tests.
+- Unverified: real SMTP inbox delivery, multi-process PostgreSQL concurrency/race tests, actual deployment/TLS/secrets/monitoring, attachments, import/webhooks, tax/discount/refund/PDF/SMS and recurring invoices.
