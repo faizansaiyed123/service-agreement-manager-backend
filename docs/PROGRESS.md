@@ -11,4 +11,4 @@ Automatic preventive-maintenance scheduler.
 Adds last_generation_attempt_at and last_generation_error to maintenance schedules so automated schedule processing is observable and diagnosable. Worker implementation and behavior tests follow separately.
 
 ## Remaining verification limits
-The automatic scheduler is not implemented until the next chunk passes CI. SMTP provider delivery and production monitoring remain unverified.
+PostgreSQL CI rejected the new revision label because it exceeded Alembic's 32-character version field. The failed migration did not advance the database revision; the pending revision ID is shortened to 0009_maint_gen_state. Re-run PostgreSQL CI before proceeding. SMTP delivery and production monitoring remain unverified.

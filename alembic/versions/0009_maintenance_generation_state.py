@@ -2,7 +2,7 @@
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0009_maintenance_generation_state"
+revision = "0009_maint_gen_state"
 down_revision = "0008_agreement_location_index"
 branch_labels = None
 depends_on = None
