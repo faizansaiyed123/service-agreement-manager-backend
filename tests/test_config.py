@@ -38,4 +38,4 @@ def test_production_settings_reject_debug_and_weak_jwt_secret():
         valid_production_settings(debug=True).validate_production()
 
     with pytest.raises(ValueError, match="at least 48 characters"):
-        valid_production_settings(jwt_secret_key="too-short-secret").validate_production()
+        valid_production_settings(jwt_secret_key="x" * 40).validate_production()
