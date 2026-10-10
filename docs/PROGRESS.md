@@ -1,16 +1,14 @@
 # Progress
 
 ## Current milestone
-Schema drift detection in CI.
+Automatic preventive-maintenance scheduler.
 
-## Verified runs
-- Notification worker/API tests: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38018304748 (success).
-- Reports API: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38018460376 (success).
-- CSV exports: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38018628359 (success).
-- PostgreSQL 16 schema upgrade: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38018805647 (success). All Alembic migrations applied and `alembic current` succeeded.
+## Verified infrastructure
+- PostgreSQL 16 migration, schema drift, Ruff, and pytest all green: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38018974043.
+- Last verified migration revision in that run: 0008_agreement_location_index.
 
-## Current change
-`alembic check` found a missing ORM-requested index on `agreements.service_location_id`. A new forward migration 0008 adds `ix_agreements_service_location_id`; prior applied migrations remain unchanged.
+## Current schema chunk
+Adds last_generation_attempt_at and last_generation_error to maintenance schedules so automated schedule processing is observable and diagnosable. Worker implementation and behavior tests follow separately.
 
-## Verification
-The migration and drift-check rerun is pending. PostgreSQL migration up to 0007 previously succeeded; schema drift check, production deployment and live SMTP remain pending until verified.
+## Remaining verification limits
+The automatic scheduler is not implemented until the next chunk passes CI. SMTP provider delivery and production monitoring remain unverified.

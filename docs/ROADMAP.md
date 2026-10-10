@@ -2,16 +2,17 @@
 
 States: PLANNED, IN_PROGRESS, IMPLEMENTED, TESTING, VERIFIED, COMMITTED, PUSHED, BLOCKED.
 
-1. Identity/company and CRM — CI suite green; PostgreSQL/Docker verification pending.
-2. Equipment and service catalog — CI suite green; PostgreSQL migration pending.
-3. Agreement lifecycle, terms/price snapshots, acceptance and audit — CI suite green.
-4. Team management and session revocation — CI suite green.
-5. Maintenance schedules, idempotent work-order generation and technician workflow — CI suite green; PostgreSQL multi-process concurrency pending.
-6. Invoice lifecycle, payment ledger, idempotency, balance/overdue reporting — CI suite green.
-7. Renewal offer schema — IN_PROGRESS for API acceptance/decline workflows.
-8. Notification outbox and delivery attempts — PLANNED.
-9. Operational reports and CSV exports — PLANNED.
-10. Integrations/webhooks, import/export recovery and reconciliation — PLANNED.
-11. PostgreSQL migration/runtime tests, security/performance review and backend completion audit — PLANNED.
+1. Identity, company and CRM — CI green; API tests use SQLite, migrations use PostgreSQL 16 CI.
+2. Equipment and service catalog — CI green.
+3. Agreement lifecycle, acceptance snapshots and audit — CI green.
+4. User administration and session revocation — CI green.
+5. Maintenance schedules and work-order dispatch — manual generation and workflows are green; automatic recurring scheduler is IN_PROGRESS.
+6. Billing and idempotent payments — CI green; PostgreSQL schema/drift check green.
+7. Renewal offer lifecycle — CI green.
+8. Notification outbox/worker — fake-sender tests green; live SMTP not configured.
+9. Operational reports and tenant-safe CSV exports — CI green.
+10. Automatic preventive-maintenance worker and retry/error observability — IN_PROGRESS.
+11. Account recovery, branch/business-hours administration, attachments, integrations/webhooks, and import/export jobs — PLANNED.
+12. Final security, Docker runtime, PostgreSQL concurrency, performance and deployment review — PLANNED.
 
-Renewal accepts must be explicit and snapshot all terms/prices. Taxes, refunds/credits, recurring invoice generation and actual email/SMS delivery need documented rules or provider configuration and are not claimed complete.
+Recurring invoice automation remains deferred until pricing-period semantics are defined; external-provider delivery is not claimed without live configuration.

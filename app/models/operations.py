@@ -25,6 +25,8 @@ class MaintenanceSchedule(Base, UUIDPrimaryKey, Timestamped):
     next_due_date: Mapped[date] = mapped_column(Date(), nullable=False, index=True)
     checklist_template: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    last_generation_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_generation_error: Mapped[str | None] = mapped_column(Text)
 
 
 class WorkOrder(Base, UUIDPrimaryKey, Timestamped):
