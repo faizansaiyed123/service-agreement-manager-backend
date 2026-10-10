@@ -25,6 +25,7 @@ Readiness: http://localhost:8000/health/ready
 ## API modules
 - Authentication, sessions, password change and password recovery: `/api/v1/auth`
 - Company profile and users: `/api/v1/companies/current`, `/api/v1/users`
+- Company branches, IANA time zones, local weekly business hours and dated closures: `/api/v1/branches`
 - Customers, contacts and service locations: `/api/v1/customers`
 - Equipment and catalog: `/api/v1/equipment`, `/api/v1/service-catalog`
 - Agreements and renewal offers: `/api/v1/agreements`
@@ -44,5 +45,9 @@ The maintenance worker processes due schedules in bounded batches, records gener
 
 ## Verification
 GitHub Actions runs Ruff and Pytest and applies all Alembic migrations against a PostgreSQL 16 service. API tests currently use SQLite for speed; the migration step itself runs against PostgreSQL. Local setup success and production readiness should be verified in the target environment.
+
+
+
+Branch business hours use the branch's configured IANA time zone and local wall-clock times. Weekdays are numbered Monday=0 through Sunday=6. A weekly-hours update must submit all seven days exactly once; a closed day has no opening or closing time. Dated branch closures represent full-day closures.
 
 Never use development secrets in production.
