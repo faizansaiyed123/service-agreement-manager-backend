@@ -29,7 +29,7 @@ def scoped_notification(db: Session, company_id: UUID, notification_id: UUID) ->
         NotificationOutbox.id == notification_id,
         NotificationOutbox.company_id == company_id,
     ))
-    if record is None:
+    if record is None or record.event_type == "auth.password_reset":
         raise DomainError(404, "notification_not_found", "Notification not found")
     return record
 
@@ -90,7 +90,10 @@ def list_notifications(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[NotificationOutbox]:
-    stmt = select(NotificationOutbox).where(NotificationOutbox.company_id == user.company_id)
+    stmt = select(NotificationOutbox).where(
+        NotificationOutbox.company_id == user.company_id,
+        NotificationOutbox.event_type != "auth.password_reset",
+    )
     if status:
         stmt = stmt.where(NotificationOutbox.status == status)
     if event_type:
@@ -124,6 +127,7 @@ def retry_dead_notification(
     record = db.scalar(select(NotificationOutbox).where(
         NotificationOutbox.id == notification_id,
         NotificationOutbox.company_id == user.company_id,
+        NotificationOutbox.event_type != "auth.password_reset",
     ).with_for_update())
     if record is None:
         raise DomainError(404, "notification_not_found", "Notification not found")
