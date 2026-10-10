@@ -3,7 +3,6 @@ import io
 from datetime import date
 from decimal import Decimal
 from typing import Any
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import func, select

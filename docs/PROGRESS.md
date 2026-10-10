@@ -13,4 +13,4 @@ Tenant-scoped CSV exports.
 Adds CSV exports for customers, invoices, work orders and agreements. Exports use tenant filtering, filter/range validation, bounded pagination and spreadsheet-formula neutralization on string cells. Invoice export derives amount paid from the payment ledger and calculates outstanding balance.
 
 ## Verification
-CSV export tests await CI. PostgreSQL migrations have not yet been applied to a live PostgreSQL instance; a PostgreSQL-backed CI migration job is the next infrastructure step.
+The first export CI run stopped at Ruff due to one unused UUID import; it has been removed in this follow-up. Pytest has not yet run for the export change. PostgreSQL migrations have not yet been applied to a live PostgreSQL instance; a PostgreSQL-backed CI migration job is the next infrastructure step.
