@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.errors import DomainError
-from app.models import Agreement, Company, Customer, Equipment, ServiceLocation, WorkOrder, WorkOrderEvent
+from app.models import Agreement, Company, Customer, Equipment, MaintenanceSchedule, ServiceLocation, WorkOrder, WorkOrderEvent
 
 MONTHS = {"monthly": 1, "quarterly": 3, "semi_annual": 6, "annual": 12}
 
@@ -93,3 +93,73 @@ def create_work_order_number(db: Session, company_id: UUID) -> str:
         raise DomainError(403, "company_inactive", "Company account is inactive")
     company.work_order_sequence += 1
     return f"WO-{company.work_order_sequence:06d}"
+
+
+
+def generate_scheduled_occurrence(
+    db: Session,
+    company_id: UUID,
+    schedule_id: UUID,
+    occurrence_date: date,
+    actor_id: UUID | None,
+    *,
+    today: date | None = None,
+) -> tuple[WorkOrder, bool]:
+    """Create one scheduled occurrence in the caller's transaction.
+
+    Returns (work_order, created). Callers commit. The row lock serializes
+    schedule advancement, while the unique occurrence constraint is the final
+    database-level duplicate guard.
+    """
+    schedule = db.scalar(select(MaintenanceSchedule).where(
+        MaintenanceSchedule.id == schedule_id,
+        MaintenanceSchedule.company_id == company_id,
+    ).with_for_update())
+    if schedule is None:
+        raise DomainError(404, "schedule_not_found", "Maintenance schedule not found")
+
+    existing = db.scalar(select(WorkOrder).where(
+        WorkOrder.maintenance_schedule_id == schedule.id,
+        WorkOrder.occurrence_date == occurrence_date,
+    ))
+    if existing is not None:
+        return existing, False
+
+    current_day = today or datetime.now(UTC).date()
+    if not schedule.is_active:
+        raise DomainError(409, "schedule_inactive", "Inactive maintenance schedules cannot generate work orders")
+    if occurrence_date != schedule.next_due_date:
+        raise DomainError(409, "occurrence_out_of_sequence", "occurrence_date must match the schedule's next due date")
+    if occurrence_date > current_day:
+        raise DomainError(409, "occurrence_not_due", "A future maintenance occurrence cannot be generated yet")
+
+    validate_context(
+        db, company_id, schedule.customer_id, schedule.service_location_id,
+        schedule.equipment_id, schedule.agreement_id, occurrence_date,
+    )
+    order = WorkOrder(
+        company_id=company_id,
+        customer_id=schedule.customer_id,
+        service_location_id=schedule.service_location_id,
+        equipment_id=schedule.equipment_id,
+        agreement_id=schedule.agreement_id,
+        maintenance_schedule_id=schedule.id,
+        occurrence_date=occurrence_date,
+        work_order_number=create_work_order_number(db, company_id),
+        title=schedule.name,
+        description=schedule.description,
+        priority="normal",
+        scheduled_for=occurrence_date,
+        status="scheduled",
+    )
+    db.add(order)
+    db.flush()
+    add_order_event(
+        db, order, actor_id, "work_order.generated",
+        detail={"schedule_id": str(schedule.id), "occurrence_date": occurrence_date.isoformat()},
+    )
+    schedule.next_due_date = next_occurrence(occurrence_date, schedule.frequency)
+    schedule.last_generation_attempt_at = datetime.now(UTC)
+    schedule.last_generation_error = None
+    db.flush()
+    return order, True

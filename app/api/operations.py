@@ -9,7 +9,7 @@ from app.api.deps import get_current_user, require_roles
 from app.core.errors import DomainError
 from app.db.session import get_db
 from app.models import MaintenanceSchedule, User, WorkOrder, WorkOrderEvent
-from app.services.maintenance import add_order_event, create_work_order_number, next_occurrence, validate_context
+from app.services.maintenance import add_order_event, create_work_order_number, generate_scheduled_occurrence, next_occurrence, validate_context
 from app.operations_schemas import AssignTechnician, CancelWorkOrder, GenerateOccurrence, ScheduleCreate, ScheduleRead, ScheduleUpdate, WorkOrderCompletion, WorkOrderCreate, WorkOrderEventRead, WorkOrderRead, WorkOrderUpdate
 
 schedules_router = APIRouter(prefix="/maintenance/schedules", tags=["maintenance"])
@@ -98,47 +98,13 @@ def generate_scheduled_work_order(
     user: User = Depends(require_roles("owner", "admin", "manager", "staff")),
     db: Session = Depends(get_db),
 ) -> WorkOrder:
-    existing = db.scalar(select(WorkOrder).join(MaintenanceSchedule).where(
-        MaintenanceSchedule.id == schedule_id, MaintenanceSchedule.company_id == user.company_id,
-        WorkOrder.occurrence_date == payload.occurrence_date,
-    ))
-    if existing is not None:
-        response.status_code = 200
-        return existing
-    schedule = db.scalar(select(MaintenanceSchedule).where(
-        MaintenanceSchedule.id == schedule_id, MaintenanceSchedule.company_id == user.company_id
-    ).with_for_update())
-    if schedule is None:
-        raise DomainError(404, "schedule_not_found", "Maintenance schedule not found")
-    db.refresh(schedule)
-    existing = db.scalar(select(WorkOrder).where(
-        WorkOrder.maintenance_schedule_id == schedule.id,
-        WorkOrder.occurrence_date == payload.occurrence_date,
-    ))
-    if existing is not None:
-        response.status_code = 200
-        return existing
-    if not schedule.is_active:
-        raise DomainError(409, "schedule_inactive", "Inactive maintenance schedules cannot generate work orders")
-    if payload.occurrence_date != schedule.next_due_date:
-        raise DomainError(409, "occurrence_out_of_sequence", "occurrence_date must match the schedule's next due date")
-    if payload.occurrence_date > date.today():
-        raise DomainError(409, "occurrence_not_due", "A future maintenance occurrence cannot be generated yet")
-    validate_context(db, user.company_id, schedule.customer_id, schedule.service_location_id, schedule.equipment_id, schedule.agreement_id, payload.occurrence_date)
-    order = WorkOrder(
-        company_id=user.company_id, customer_id=schedule.customer_id,
-        service_location_id=schedule.service_location_id, equipment_id=schedule.equipment_id,
-        agreement_id=schedule.agreement_id, maintenance_schedule_id=schedule.id,
-        occurrence_date=payload.occurrence_date, work_order_number=create_work_order_number(db, user.company_id),
-        title=schedule.name, description=schedule.description, priority="normal",
-        scheduled_for=payload.occurrence_date, status="scheduled",
+    order, created = generate_scheduled_occurrence(
+        db, user.company_id, schedule_id, payload.occurrence_date, user.id,
     )
-    db.add(order)
-    db.flush()
-    add_order_event(db, order, user.id, "work_order.generated", detail={"schedule_id": str(schedule.id), "occurrence_date": payload.occurrence_date.isoformat()})
-    schedule.next_due_date = next_occurrence(payload.occurrence_date, schedule.frequency)
     db.commit()
     db.refresh(order)
+    if not created:
+        response.status_code = 200
     return order
 
 
