@@ -39,3 +39,12 @@ def test_production_settings_reject_debug_and_weak_jwt_secret():
 
     with pytest.raises(ValueError, match="at least 48 characters"):
         valid_production_settings(jwt_secret_key="x" * 40).validate_production()
+
+
+
+def test_cors_origins_accept_comma_separated_and_json_environment_values():
+    comma_separated = Settings(cors_origins="http://localhost:3000,http://localhost:5173")
+    assert comma_separated.cors_origins == ["http://localhost:3000", "http://localhost:5173"]
+
+    json_array = Settings(cors_origins='["https://app.example.com","https://admin.example.com"]')
+    assert json_array.cors_origins == ["https://app.example.com", "https://admin.example.com"]
