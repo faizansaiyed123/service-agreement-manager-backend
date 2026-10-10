@@ -49,6 +49,9 @@ jobs:
         run: cp .env.example .env
       - name: Start API and background workers
         run: docker compose --profile email up --build --wait -d
+      - name: Dump service logs if startup failed
+        if: failure()
+        run: docker compose --profile email logs --no-color db api maintenance-worker notification-worker || true
       - name: Verify database readiness through the API
         run: |
           python - <<'PY'
