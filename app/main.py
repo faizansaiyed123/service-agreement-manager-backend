@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from app.api import agreements, assets, auth, billing, companies, customers, notifications, operations, reports, renewals, users
+from app.api import agreements, assets, auth, billing, companies, customers, exports, notifications, operations, reports, renewals, users
 from app.core.config import get_settings
 from app.core.errors import install_error_handlers
 from app.db.session import engine
@@ -24,7 +24,7 @@ async def lifespan(_: FastAPI):
     engine.dispose()
 
 
-app = FastAPI(title=settings.app_name, version="0.5.0", debug=settings.debug, lifespan=lifespan)
+app = FastAPI(title=settings.app_name, version="0.6.0", debug=settings.debug, lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -74,3 +74,4 @@ app.include_router(billing.router, prefix=settings.api_v1_prefix)
 app.include_router(renewals.router, prefix=settings.api_v1_prefix)
 app.include_router(notifications.router, prefix=settings.api_v1_prefix)
 app.include_router(reports.router, prefix=settings.api_v1_prefix)
+app.include_router(exports.router, prefix=settings.api_v1_prefix)

@@ -1,7 +1,7 @@
 # Working state
 
-- Active task: reporting API.
-- Current endpoints: agreement summary, invoice receivables, work-order status and technician workload.
-- Acceptance: each query scopes by company; monetary totals use Decimal values; overdue calculations use UTC date and the current ledger balance; optional date ranges are validated; report response includes calculation context.
-- Current change adds report schemas/routes/tests, main router registration and checkpoints.
-- Next safe action: inspect CI on this commit, fix failures, then add CSV exports with formula-injection protection.
+- Active task: CSV export endpoints.
+- Routes: GET /api/v1/exports/customers.csv, invoices.csv, work-orders.csv, agreements.csv.
+- Acceptance: current company scope, filters/date validation, max 10,000 rows, CSV attachment response, formula injection mitigation for text cells, invoice paid/balance from payment ledger.
+- Current commit adds app/api/exports.py, test coverage, main registration and checkpoint docs.
+- Next safe action: inspect the CI run, correct failures, then add a PostgreSQL service and explicit Alembic migration execution to GitHub Actions.

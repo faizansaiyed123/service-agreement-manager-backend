@@ -1,15 +1,16 @@
 # Progress
 
 ## Current milestone
-Tenant-scoped operational reports.
+Tenant-scoped CSV exports.
 
 ## Verified prior feature runs
-- Notification outbox schema: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38017858281 (success).
-- Notification API: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38018132338 (success).
-- Notification worker/tests: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38018304748 (success).
+- Notifications API: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38018132338 (success).
+- Notification worker: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38018252622 (success).
+- Notification worker tests: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38018304748 (success).
+- Operational reports: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38018460376 (success).
 
 ## Current change
-Adds agreement lifecycle counts, billing receivables and overdue balance calculations, and work-order status/technician workload reporting. Calculation definitions and UTC as-of handling are returned/documented in response. Tenant filters are enforced in each query.
+Adds CSV exports for customers, invoices, work orders and agreements. Exports use tenant filtering, filter/range validation, bounded pagination and spreadsheet-formula neutralization on string cells. Invoice export derives amount paid from the payment ledger and calculates outstanding balance.
 
 ## Verification
-Report tests await CI. CSV exports are the next slice after reports pass. PostgreSQL/Docker verification still needs a configured live environment.
+CSV export tests await CI. PostgreSQL migrations have not yet been applied to a live PostgreSQL instance; a PostgreSQL-backed CI migration job is the next infrastructure step.
