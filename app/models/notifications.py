@@ -14,7 +14,7 @@ class NotificationOutbox(Base, UUIDPrimaryKey, Timestamped):
         CheckConstraint("channel in ('email')", name="supported_channel"),
         CheckConstraint("status in ('queued','processing','sent','dead')", name="valid_status"),
         CheckConstraint("attempt_count >= 0 and max_attempts between 1 and 10", name="valid_attempt_limits"),
-        UniqueConstraint("company_id", "idempotency_key", name="company_idempotency_key"),
+        UniqueConstraint("company_id", "idempotency_key", name="notification_company_idempotency_key"),
     )
 
     company_id: Mapped[UUID] = mapped_column(

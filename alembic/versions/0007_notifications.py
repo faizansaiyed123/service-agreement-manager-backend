@@ -39,7 +39,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["company_id"], ["companies.id"], name="fk_notification_outbox_company_id_companies", ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["created_by_user_id"], ["users.id"], name="fk_notification_outbox_created_by_user_id_users", ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id", name="pk_notification_outbox"),
-        sa.UniqueConstraint("company_id", "idempotency_key", name="company_idempotency_key"),
+        sa.UniqueConstraint("company_id", "idempotency_key", name="notification_company_idempotency_key"),
     )
     op.create_index("ix_notification_outbox_company_id", "notification_outbox", ["company_id"])
     op.create_index("ix_notification_outbox_status", "notification_outbox", ["status"])

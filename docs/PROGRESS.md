@@ -14,5 +14,8 @@ PostgreSQL-backed migration verification in CI.
 ## Current change
 CI now starts PostgreSQL 16, runs `alembic upgrade head` and `alembic current`, then Ruff and SQLite-backed API tests. This is the first automated real-PostgreSQL migration test in the project.
 
+## PostgreSQL migration finding
+The first PostgreSQL run caught a constraint-name collision between payments and notification outbox. The notification constraint now has a unique schema-level name in both ORM and migration; the fresh PostgreSQL CI run will verify the correction.
+
 ## Remaining verification limits
-The new PostgreSQL CI job itself must pass before its migration verification is called green. Live SMTP delivery and production Docker/deployment/monitoring remain unverified.
+Live SMTP delivery and production Docker/deployment/monitoring remain unverified.
