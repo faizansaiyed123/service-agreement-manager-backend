@@ -23,7 +23,7 @@ Liveness: http://localhost:8000/health/live
 Readiness: http://localhost:8000/health/ready
 
 ## API modules
-- Authentication and sessions: `/api/v1/auth`
+- Authentication, sessions and password change: `/api/v1/auth`
 - Company profile and users: `/api/v1/companies/current`, `/api/v1/users`
 - Customers, contacts and service locations: `/api/v1/customers`
 - Equipment and catalog: `/api/v1/equipment`, `/api/v1/service-catalog`

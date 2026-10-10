@@ -1,36 +1,14 @@
 # Progress
 
 ## Current milestone
-Automatic preventive-maintenance worker — VERIFIED by GitHub Actions.
+Self-service password change and session invalidation.
 
-## Latest verification
-Run: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38019681845  
-Commit: 92c2e41e72787fc7d8370dea193448ebcfe34f41
+## Verified recent work
+- Automatic maintenance worker and all current migrations: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38019681845 (success).
+- Schema changes through Alembic revision 0009_maint_gen_state pass PostgreSQL 16 upgrade and `alembic check`.
 
-Passed:
-- Ruff lint.
-- Fresh PostgreSQL 16 database migration upgrade through head.
-- Alembic current revision check.
-- Alembic model/schema drift check.
-- Full pytest API/regression suite, including worker retry/catch-up tests.
+## Current change
+Adds authenticated password change: verify current password, reject identical new password, set a new Argon2 hash, and revoke every active session. Tests cover invalid current password, unchanged password, successful change, refresh-token revocation, cross-session invalidation, and new login.
 
-## Implemented
-- Company-authenticated customer, contact and service-location APIs.
-- Equipment and service catalog.
-- Agreement draft/proposal/acceptance, snapshot pricing, cancellation, version/event history, explicit renewal offers.
-- Company user administration and server-side session revocation.
-- Maintenance schedules, work-order lifecycle and technician assignment/checklists.
-- Automatic maintenance worker with locked due-schedule claims, bounded catch-up, unique occurrence protection, per-schedule error visibility and retry after data repair.
-- Invoices and idempotent payment ledger, balance/overdue reports.
-- Notification outbox and SMTP worker with bounded retries/dead-letter recovery.
-- Operational reports and tenant-safe CSV exports.
-- PostgreSQL 16 migration + Alembic drift checks in CI.
-
-## Remaining limitations
-- PostgreSQL migration/drift checks run on a real PostgreSQL 16 service. The full HTTP API suite still uses SQLite in CI; PostgreSQL concurrency/race tests remain to be added.
-- Live SMTP/email provider delivery, deployment Docker runtime, TLS/secret management and production monitoring are not verified.
-- SMS, invoice PDF delivery, refunds/credits, tax/discount support, and automatic recurring billing remain unimplemented.
-- Password recovery/change, branch/region management, attachments, imports/webhooks and integration credential management remain planned.
-
-## Next
-Implement password change/session invalidation and account recovery as a focused security slice; validate its input and failure paths, then run CI.
+## Verification
+Password-change tests and security chunk await CI. Password reset emails/account recovery remain separate work; no recovery link delivery is claimed.

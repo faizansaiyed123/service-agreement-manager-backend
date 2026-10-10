@@ -11,3 +11,8 @@ Copy .env.example to .env, replace the sample JWT secret and run docker compose 
 7. Register a second company and verify its token gets 404 when attempting to read the first company's customer ID.
 
 Tests in tests/ provide repeatable request examples. Do not put real customer data or credentials into test fixtures or issue reports.
+
+
+## Password change
+Send POST /api/v1/auth/change-password with a current bearer token and JSON fields:
+`current_password` and `new_password` (at least 12 characters). A successful change returns 204 and revokes all sessions; log in again with the new password.

@@ -13,6 +13,7 @@ from app.core.security import create_token, decode_token, hash_password, verify_
 from app.db.session import get_db
 from app.models import AuthSession, Company, User
 from app.schemas import LoginRequest, RefreshRequest, RegisterRequest, TokenPair, UserRead
+from app.user_schemas import PasswordChange
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -97,6 +98,28 @@ def refresh(payload: RefreshRequest, db: Session = Depends(get_db)) -> TokenPair
     session.refresh_jti, session.expires_at = next_jti, next_expiry
     db.commit()
     return pair
+
+
+@router.post("/change-password", status_code=204)
+def change_password(
+    payload: PasswordChange,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    if not verify_password(payload.current_password, user.password_hash):
+        raise DomainError(401, "invalid_current_password", "Current password is incorrect")
+    if verify_password(payload.new_password, user.password_hash):
+        raise DomainError(409, "password_unchanged", "New password must differ from current password")
+    user.password_hash = hash_password(payload.new_password)
+    now = datetime.now(UTC)
+    sessions = db.scalars(select(AuthSession).where(
+        AuthSession.user_id == user.id,
+        AuthSession.revoked_at.is_(None),
+    ).with_for_update()).all()
+    for session in sessions:
+        session.revoked_at = now
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.post("/logout", status_code=204)
