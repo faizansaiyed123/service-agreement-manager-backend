@@ -1,15 +1,15 @@
 # Progress
 
 ## Current milestone
-Durable notification outbox and SMTP worker.
+Tenant-scoped operational reports.
 
 ## Verified prior feature runs
-- Renewal API: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38017709123 (success).
-- Notification schema: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38017858281 (success).
+- Notification outbox schema: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38017858281 (success).
 - Notification API: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38018132338 (success).
+- Notification worker/tests: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38018304748 (success).
 
-## Implemented in main
-Email notification enqueue/list/detail, idempotency-key conflict and replay behavior, attempt history, retry endpoint, SMTP worker, lease-based claims, bounded retries and dead-letter recovery. New tests exercise the queue through an injected sender and do not require SMTP credentials.
+## Current change
+Adds agreement lifecycle counts, billing receivables and overdue balance calculations, and work-order status/technician workload reporting. Calculation definitions and UTC as-of handling are returned/documented in response. Tenant filters are enforced in each query.
 
 ## Verification
-Worker tests/CI are running in the current commit. Actual provider delivery remains dependent on SMTP environment configuration. PostgreSQL migrations, real row-lock concurrency, Docker deployment and monitoring are not yet verified.
+Report tests await CI. CSV exports are the next slice after reports pass. PostgreSQL/Docker verification still needs a configured live environment.

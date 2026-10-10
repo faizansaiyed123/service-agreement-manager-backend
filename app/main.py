@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from app.api import agreements, assets, auth, billing, companies, customers, notifications, operations, renewals, users
+from app.api import agreements, assets, auth, billing, companies, customers, notifications, operations, reports, renewals, users
 from app.core.config import get_settings
 from app.core.errors import install_error_handlers
 from app.db.session import engine
@@ -73,3 +73,4 @@ app.include_router(operations.work_orders_router, prefix=settings.api_v1_prefix)
 app.include_router(billing.router, prefix=settings.api_v1_prefix)
 app.include_router(renewals.router, prefix=settings.api_v1_prefix)
 app.include_router(notifications.router, prefix=settings.api_v1_prefix)
+app.include_router(reports.router, prefix=settings.api_v1_prefix)
