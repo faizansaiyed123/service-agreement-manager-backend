@@ -72,6 +72,8 @@ def promote_primary(db: Session, company_id: UUID, target: CompanyBranch) -> Non
     for current in primaries:
         if current.id != target.id:
             current.is_primary = False
+    # Free the partial unique index before the replacement is set true.
+    db.flush()
     target.is_primary = True
 
 
