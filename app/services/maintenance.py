@@ -62,7 +62,7 @@ def validate_context(
 def add_order_event(
     db: Session,
     order: WorkOrder,
-    actor_id: UUID,
+    actor_id: UUID | None,
     name: str,
     previous: str | None = None,
     detail: dict | None = None,

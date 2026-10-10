@@ -1,7 +1,6 @@
 import logging
 import time
 from datetime import UTC, date, datetime
-from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -98,7 +97,7 @@ def run_once(
                             add_order_event(
                                 db,
                                 work_order,
-                                schedule.created_by or UUID(int=0),
+                                schedule.created_by,
                                 "work_order.generated_by_scheduler",
                                 detail={
                                     "schedule_id": str(schedule.id),
