@@ -17,6 +17,7 @@ class Company(Base, UUIDPrimaryKey, Timestamped):
     customer_sequence: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     agreement_sequence: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     work_order_sequence: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    invoice_sequence: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     users: Mapped[list["User"]] = relationship(back_populates="company")
 

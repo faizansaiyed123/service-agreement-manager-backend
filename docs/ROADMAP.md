@@ -2,15 +2,15 @@
 
 States: PLANNED, IN_PROGRESS, IMPLEMENTED, TESTING, VERIFIED, COMMITTED, PUSHED, BLOCKED.
 
-1. Backend foundation, identity and CRM — previously green in GitHub Actions; PostgreSQL/Docker verification pending.
-2. Equipment and service catalog — previously green in GitHub Actions; PostgreSQL migration execution pending.
-3. Agreement lifecycle, snapshots, acceptance and audit history — green in GitHub Actions; PostgreSQL verification pending.
-4. Team administration and server-side session revocation — included in the current CI scope.
-5. Maintenance schedules and retry-safe work-order generation — included in the current CI scope.
-6. Work-order dispatch, technician assignment, completion checklists and service history — included in the current CI scope.
-7. Invoicing, immutable issued invoices, payment ledger, balance calculations and reconciliation — PLANNED.
-8. Renewals, cancellation policy, durable notification/outbox processing — PLANNED.
-9. Reporting/exports and integrations/webhooks/imports — PLANNED.
-10. End-to-end regression, PostgreSQL migrations, Docker, security, performance and final completion review — PLANNED.
+1. Foundation/identity/CRM — previously green in GitHub Actions; PostgreSQL/Docker pending.
+2. Equipment/service catalog — previously green in GitHub Actions; PostgreSQL migration pending.
+3. Agreement lifecycle, immutable proposal snapshots, acceptance and audit — previously green in GitHub Actions.
+4. Team administration and session revocation — previously green in GitHub Actions.
+5. Maintenance schedules and work-order dispatch/checklists — CI suite green; PostgreSQL migration and multi-process race verification pending.
+6. Billing schema (invoices, invoice lines, payment ledger, idempotency and audit events) — IN_PROGRESS in current commit.
+7. Invoice API workflows and payment settlement — PLANNED for next small commit.
+8. Renewal workflows and durable notifications/outbox — PLANNED.
+9. Reporting, imports, exports, integrations and webhooks — PLANNED.
+10. Final PostgreSQL integration tests, Docker runtime, security/performance review and backend completion review — PLANNED.
 
-Dependencies: identity and tenant boundaries precede all modules; customers/locations precede equipment, agreements and jobs; agreements may drive maintenance and recurring billing; work-order completion feeds service history and billing; outbox supports resilient notifications and integrations.
+Dependencies: identity/tenant boundaries precede every domain; customer/location and agreements precede billing; work-order completion feeds service history and billing. Recurring billing is blocked on a documented definition of agreement total versus installment amount.
