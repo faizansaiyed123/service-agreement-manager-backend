@@ -152,10 +152,14 @@ def update_branch(
     user: User = Depends(require_roles(*BRANCH_ADMIN)),
     db: Session = Depends(get_db),
 ) -> CompanyBranch:
+    db.scalar(select(Company).where(Company.id == user.company_id).with_for_update())
     branch = get_branch(db, user.company_id, branch_id, lock=True)
     values = branch_values(payload)
     if not values:
         raise DomainError(422, "empty_update", "At least one field must be provided")
+    for required_field in ("name", "code", "timezone", "country_code", "is_active", "is_primary"):
+        if required_field in values and values[required_field] is None:
+            raise DomainError(422, "invalid_field", f"{required_field} cannot be null")
     if values.get("timezone"):
         ensure_timezone(values["timezone"])
     if values.get("code") and duplicate_code(db, user.company_id, values["code"], excluding=branch.id):
