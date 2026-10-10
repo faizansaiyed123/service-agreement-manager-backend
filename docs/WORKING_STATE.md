@@ -1,8 +1,8 @@
 # Working state
 
-- Active task: billing schema/migration.
-- Current slice defines invoice headers, line-item price snapshots, payment ledger, idempotency constraints, invoice audit events, and company invoice sequence.
-- Migration revision: 0005_billing after 0004_operations.
-- API routes and payment behavior tests are not part of the schema-only commit; implement them next after inspecting CI.
-- Automated recurring invoices are intentionally deferred until price-period semantics are defined explicitly; tax/discounts/refunds/credits are also out of this slice.
-- Next safe action: inspect CI on the schema commit; then add invoice create/edit/issue/void and payment APIs with retry-safe idempotency.
+- Active task: invoice and payment workflows.
+- Acceptance: tenant-scoped invoice references; Decimal/Numeric amounts; draft-only edits; issue/void transition checks; issued invoice immutability; partial/full payments; overpayment rejected; idempotency key replay returns one ledger row and key payload mismatch is rejected; event history and overdue query.
+- Model/migration schema commit and cleanup commit passed Ruff/pytest CI.
+- Current API chunk includes billing schemas/routes, main registration, API tests and checkpoint docs.
+- PostgreSQL migration and concurrent transaction test are not verified in this environment.
+- Next safe action: inspect the current CI log, correct any failures, then commit a focused follow-up.

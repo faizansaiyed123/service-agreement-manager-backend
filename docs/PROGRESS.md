@@ -1,18 +1,17 @@
 # Progress
 
 ## Current milestone
-Invoice and payment ledger foundation.
+Invoice and payment API workflows.
 
-## Verified API slices
-- Identity/user administration CI: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/37961486405 (success).
-- Agreement lifecycle + audit ordering: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/37959977883 (success).
-- Maintenance/user integrated test suite: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38016919388 (success).
+## Verified feature runs
+- Maintenance + session suite: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38016919388 (success).
+- Billing schema import/lint verification: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38017135881 (success).
 
-## Billing schema added in current commit
-Invoice headers and immutable line snapshots, payment ledger with company-scoped idempotency key and request fingerprint, invoice audit events, and company invoice-number sequence. API routes and transaction/idempotency tests are the next bounded chunk.
+## Implemented source
+Tenant-scoped identity, CRM, assets, agreements, maintenance and work-order dispatch. Billing schema now has invoice and invoice-line snapshots, payment ledger/idempotency fingerprint and audit events. The current API chunk adds invoice draft CRUD/list, issue/void workflows, derived payment balances/overdue visibility, append-only payment recording, idempotent retries, payment history and invoice event history.
 
 ## Verification
-The schema commit's GitHub Actions status will be inspected after push. PostgreSQL migration execution, live database transaction/concurrency checks, Docker runtime and production are not verified here.
+Billing API routes/tests await GitHub Actions. PostgreSQL migration execution, database locking races, Docker startup and production deployment remain unverified.
 
-## Product boundary
-Tax/discount configuration, refunds/credits, and automatic recurring invoice generation remain deferred. Current agreement data doesn't distinguish per-period price from full-term total; recurring billing must not guess.
+## Deferred deliberately
+Taxes/discounts, refunds/credits, PDF delivery and automatic recurring invoice generation remain out of scope for this billing slice. Agreement total-vs-installment pricing must be defined before recurring invoice generation.
