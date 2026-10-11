@@ -182,6 +182,32 @@ def get_import(
     return job
 
 
+@router.put("/{job_id}/rows/{row_id}", response_model=CustomerImportRowRead)
+def correct_import_row(
+    job_id: UUID,
+    row_id: UUID,
+    payload: CustomerImportRowInput,
+    user: User = Depends(require_roles(*IMPORT_ROLES)),
+    db: Session = Depends(get_db),
+) -> CustomerImportRow:
+    job = scoped_job(db, user.company_id, job_id)
+    row = db.scalar(select(CustomerImportRow).where(
+        CustomerImportRow.id == row_id,
+        CustomerImportRow.job_id == job.id,
+    ).with_for_update())
+    if row is None:
+        raise DomainError(404, "customer_import_row_not_found", "Customer import row not found")
+    if row.status == "imported":
+        raise DomainError(409, "import_row_already_imported", "An imported row cannot be corrected")
+    row.payload = payload.model_dump(mode="json")
+    row.status = "pending"
+    row.error_code = None
+    row.error_message = None
+    db.commit()
+    db.refresh(row)
+    return row
+
+
 @router.post("/{job_id}/retry", response_model=CustomerImportRead)
 def retry_failed_import_rows(
     job_id: UUID,
@@ -197,23 +223,15 @@ def retry_failed_import_rows(
     ).with_for_update())
     if job is None:
         raise DomainError(404, "customer_import_not_found", "Customer import not found")
-    failed = db.scalars(select(CustomerImportRow).where(
+    pending = db.scalars(select(CustomerImportRow).where(
         CustomerImportRow.job_id == job.id,
-        CustomerImportRow.status == "failed",
-        CustomerImportRow.error_code == "row_validation_failed",
+        CustomerImportRow.status == "pending",
     ).with_for_update()).all()
-    if not failed:
+    if not pending:
         refresh_job_counts(db, job)
         db.commit()
         db.refresh(job)
         return job
-    # Failed validation rows are deliberately immutable until the caller edits
-    # the stored payload through a future correction endpoint; retry is useful
-    # for rows whose transient import error is recoverable.
-    for row in failed:
-        row.status = "pending"
-        row.error_code = None
-        row.error_message = None
     import_valid_rows(db, company, job)
     refresh_job_counts(db, job)
     db.commit()
