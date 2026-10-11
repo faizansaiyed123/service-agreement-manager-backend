@@ -67,7 +67,7 @@ def render_payload(delivery: WebhookDelivery) -> bytes:
 
 
 def sign_payload(body: bytes, secret: str, timestamp: int) -> str:
-    signed = f"{timestamp}.".encode("utf-8") + body
+    signed = f"{timestamp}.".encode() + body
     digest = hmac.new(secret.encode("utf-8"), signed, hashlib.sha256).hexdigest()
     return f"v1={digest}"
 
