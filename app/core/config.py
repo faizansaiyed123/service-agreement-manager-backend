@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     password_reset_token_minutes: int = Field(default=30, ge=1, le=1440)
     password_reset_cooldown_seconds: int = Field(default=60, ge=0, le=86400)
     password_reset_url: str = "http://localhost:3000/reset-password"
+    storage_backend: str = "local"
+    storage_root: str = "./storage"
+    storage_max_file_bytes: int = Field(default=25 * 1024 * 1024, ge=1, le=500 * 1024 * 1024)
 
     @field_validator("cors_origins", mode="before")
     @classmethod
