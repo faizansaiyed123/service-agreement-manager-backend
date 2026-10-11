@@ -1,6 +1,7 @@
 import os
 from collections.abc import Generator
 
+os.environ["SAM_ORIGINAL_DATABASE_URL"] = os.environ.get("DATABASE_URL", "")
 os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
 os.environ["JWT_SECRET_KEY"] = "test-secret-with-more-than-32-characters-long"
 os.environ["APP_ENV"] = "test"
