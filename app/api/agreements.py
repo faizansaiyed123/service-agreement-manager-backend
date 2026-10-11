@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.agreement_schemas import AcceptanceEvidence, AgreementCreate, AgreementEventRead, AgreementLineInput, AgreementRead, AgreementUpdate, AgreementVersionRead, ReasonRequest
 from app.api.deps import get_current_user, require_roles
 from app.core.errors import DomainError
+from app.webhook_service import publish_webhook_event
 from app.db.session import get_db
 from app.models import Agreement, AgreementEvent, AgreementLine, AgreementVersion, Company, Customer, ServiceCatalogItem, ServiceLocation, User
 
@@ -30,6 +31,11 @@ def add_event(db: Session, agreement: Agreement, actor_id: UUID, event_type: str
         agreement_id=agreement.id, actor_user_id=actor_id, event_type=event_type,
         from_status=from_status, to_status=agreement.status, detail=detail, created_at=datetime.now(UTC),
     ))
+    webhook_detail = {"agreement_id": str(agreement.id), "from_status": from_status, "to_status": agreement.status, "detail": detail}
+    if event_type == "agreement.created":
+        publish_webhook_event(db, agreement.company_id, "agreement.created", webhook_detail)
+    elif from_status is not None:
+        publish_webhook_event(db, agreement.company_id, "agreement.status_changed", webhook_detail)
 
 
 def make_line(db: Session, company_id: UUID, payload: AgreementLineInput) -> AgreementLine:
