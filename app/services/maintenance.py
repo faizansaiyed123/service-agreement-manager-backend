@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.errors import DomainError
+from app.webhook_service import publish_webhook_event
 from app.models import Agreement, Company, Customer, Equipment, MaintenanceSchedule, ServiceLocation, WorkOrder, WorkOrderEvent
 
 MONTHS = {"monthly": 1, "quarterly": 3, "semi_annual": 6, "annual": 12}
@@ -76,6 +77,13 @@ def add_order_event(
         detail=detail,
         created_at=datetime.now(UTC),
     ))
+    webhook_detail = {"work_order_id": str(order.id), "from_status": previous, "to_status": order.status, "detail": detail}
+    if name == "work_order.created":
+        publish_webhook_event(db, order.company_id, "work_order.created", webhook_detail)
+    elif name == "work_order.generated":
+        publish_webhook_event(db, order.company_id, "maintenance.work_order_generated", webhook_detail)
+    elif previous is not None:
+        publish_webhook_event(db, order.company_id, "work_order.status_changed", webhook_detail)
 
 
 def next_occurrence(current: date, frequency: str) -> date:
