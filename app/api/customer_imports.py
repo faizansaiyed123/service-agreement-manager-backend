@@ -137,6 +137,16 @@ def import_valid_rows(db: Session, company: Company, job: CustomerImportJob) -> 
     ).order_by(CustomerImportRow.row_number).with_for_update()).all()
     for row in rows:
         data = CustomerImportRowInput.model_validate(row.payload)
+        if data.email:
+            existing = db.scalar(select(Customer.id).where(
+                Customer.company_id == company.id,
+                Customer.email == str(data.email).lower(),
+            ))
+            if existing is not None:
+                row.status = "failed"
+                row.error_code = "customer_email_exists"
+                row.error_message = "A customer with this email already exists"
+                continue
         company.customer_sequence += 1
         customer = Customer(
             company_id=company.id,
