@@ -51,3 +51,4 @@ services:
     command: ["python", "-m", "app.workers.notifications"]
 volumes:
   postgres_data:
+  attachments_data:
