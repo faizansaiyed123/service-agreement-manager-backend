@@ -8,12 +8,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 
-from conftest import TestingSession
 from app.api.billing import record_payment
 from app.api.deps import get_db
 from app.core.errors import DomainError
-from app.db.base import Base
-from app.models import Company, Invoice, Payment, User, WorkOrder
+from app.models import Payment, User, WorkOrder
 from app.operations_schemas import PaymentCreate
 from app.services.maintenance import generate_scheduled_occurrence
 from app.main import app
