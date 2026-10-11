@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from app.models import User, WebhookDelivery
 from app.webhook_service import publish_webhook_event
 from app.workers.webhooks import run_once, sign_payload
-from tests.conftest import TestingSession
+from conftest import TestingSession
 
 
 def register(client, company, email):
