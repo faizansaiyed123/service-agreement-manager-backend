@@ -22,6 +22,7 @@ from app.customer_import_schemas import (
 )
 from app.db.session import get_db
 from app.models import Company, Customer, CustomerImportJob, CustomerImportRow, User
+from app.webhook_service import publish_webhook_event
 
 router = APIRouter(prefix="/customers/imports", tags=["customer-imports"])
 IMPORT_ROLES = ("owner", "admin", "manager")
@@ -216,6 +217,10 @@ def import_valid_rows(db: Session, company: Company, job: CustomerImportJob) -> 
         db.add(customer)
         db.flush()
         row.customer_id = customer.id
+        publish_webhook_event(db, company.id, "customer.created", {
+            "customer_id": str(customer.id), "customer_number": customer.customer_number,
+            "name": customer.name, "source": "bulk_import",
+        })
         row.status = "imported"
         row.error_code = None
         row.error_message = None
