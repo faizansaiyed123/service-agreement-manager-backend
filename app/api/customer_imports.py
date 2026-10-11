@@ -149,7 +149,7 @@ def create_import(
     db.add(job)
     try:
         db.flush()
-    except IntegrityError:
+    except IntegrityError as exc:
         db.rollback()
         if not normalized_key:
             raise
@@ -164,7 +164,7 @@ def create_import(
                 409,
                 "idempotency_key_reused",
                 "The Idempotency-Key was already used with a different import request",
-            )
+            ) from exc
         response.status_code = 200
         return existing
 
