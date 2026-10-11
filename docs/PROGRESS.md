@@ -1,10 +1,12 @@
 # Progress
 
 ## Current milestone
-Company branches, local business hours and dated closures.
+Webhook integrations and delivery infrastructure.
 
 ## Latest verification
-- Feature/runtime CI: https://github.com/faizansaiyed123/service-agreement-manager-backend/actions/runs/38021794812 — Ruff, PostgreSQL 16 migration upgrade through revision 0012, Alembic drift check and full pytest passed. Docker Compose built/started the API and both workers and the readiness probe passed; cleanup was finishing at checkpoint time.
+- Customer-import ORM/migration drift was fixed and run 115 passed Ruff, PostgreSQL 16 migration upgrade, Alembic drift check, full pytest and Docker Compose readiness.
+- Attachment Docker persistence was added with a dedicated `attachments_data` volume; Compose startup and migration checks have passed on the webhook-era runs.
+- Webhook run 142 is validating the full endpoint/delivery stack after the test-collection and worker-lint fixes; its result is not yet complete at this checkpoint.
 
 ## Implemented
 - Tenant-scoped identity, CRM, equipment/catalog, agreements, immutable snapshots, acceptance/audit and explicit renewals.
@@ -14,12 +16,17 @@ Company branches, local business hours and dated closures.
 - Notification outbox and SMTP worker with bounded retries/dead-letter recovery. Password reset outbox rows are hidden from ordinary notification APIs.
 - Production settings validation, timezone database dependency, Docker Compose maintenance worker and opt-in email worker, PostgreSQL 16 migration/drift checks and container readiness smoke job.
 - Company branches with IANA time zones, one primary branch per company enforced by a partial unique index, seven-day local-time business hours, date closures and tenant-isolated CRUD.
+- Recoverable, row-level customer bulk imports with preview, partial success, correction/retry and request-level `Idempotency-Key` replay protection.
+- Tenant-scoped attachment metadata, local streaming storage, SHA-256 integrity tracking, size limits, upload/list/download/update/soft-delete APIs and persistent Docker storage.
+- Tenant-scoped webhook endpoints with encrypted-at-rest secrets, event subscriptions, secret rotation, durable delivery/attempt records, signed HTTPS delivery, SSRF/private-network protection, backoff/dead-letter recovery and retry APIs.
+- Webhook event emission is wired into customer creation/updates and bulk imports, agreement lifecycle transitions, work-order lifecycle/generation, invoice issuance/status changes and payment receipt.
 
 ## Current limitations
 - Real SMTP delivery still needs provider credentials and provider-backed verification.
-- API tests use SQLite; migrations are verified on PostgreSQL 16, but multi-process race tests for payments and schedule generation remain outstanding.
-- Bulk customer imports, attachment storage, webhooks/integrations, tax/discount configuration, refunds/credits, invoice PDF delivery, SMS and recurring invoices remain unimplemented.
+- Webhook run 142 must finish before this milestone is marked verified.
+- API tests use SQLite; migrations are verified on PostgreSQL 16, but multi-process race tests for payments, schedule generation and webhook workers remain outstanding.
+- Object-storage providers beyond the functional local storage backend, tax/discount configuration, refunds/credits, invoice PDF delivery, SMS and recurring invoices remain unimplemented.
 - Production deployment, TLS/proxy/secrets setup and operational monitoring have not been verified.
 
 ## Next
-Implement idempotent customer bulk import with row-level validation and a recoverable import result, then run the complete CI/Compose suite before moving to webhooks and final concurrency review.
+After webhook CI is green, finish dedicated concurrency/security/performance testing and the final backend completion review.
