@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class CustomerImportRowInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=180)
     kind: Literal["residential", "commercial"] = "residential"
     email: EmailStr | None = None
@@ -27,7 +28,7 @@ class CustomerImportRowInput(BaseModel):
 
 
 class CustomerImportRequest(BaseModel):
-    rows: list[CustomerImportRowInput] = Field(min_length=1, max_length=2000)
+    rows: list[dict] = Field(min_length=1, max_length=2000)
 
 
 class CustomerImportPreviewRow(BaseModel):
