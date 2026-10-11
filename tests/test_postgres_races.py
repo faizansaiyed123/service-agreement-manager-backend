@@ -12,7 +12,7 @@ from app.api.billing import record_payment
 from app.api.deps import get_db
 from app.core.errors import DomainError
 from app.models import Payment, User, WorkOrder
-from app.operations_schemas import PaymentCreate
+from app.billing_schemas import PaymentCreate
 from app.services.maintenance import generate_scheduled_occurrence
 from app.main import app
 
