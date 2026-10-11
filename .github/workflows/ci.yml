@@ -40,6 +40,10 @@ jobs:
       - name: Verify ORM and database schema are in sync
         run: alembic check
       - run: pytest
+      - name: Run PostgreSQL concurrency tests
+        env:
+          RUN_PG_RACE_TESTS: "1"
+        run: pytest tests/test_postgres_races.py
 
   compose-smoke:
     runs-on: ubuntu-latest
