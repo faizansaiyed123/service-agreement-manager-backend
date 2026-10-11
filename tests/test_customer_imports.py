@@ -81,3 +81,29 @@ def test_customer_import_rejects_existing_email_without_corrupting_job(client):
     detail = client.get(f"/api/v1/customers/imports/{job['id']}", headers=headers).json()
     errors = [row["error_code"] for row in detail["rows"] if row["status"] == "failed"]
     assert errors == ["customer_email_exists"]
+
+
+def test_customer_import_is_idempotent_with_same_key(client):
+    headers = register(client, "Idempotent Import HVAC", "idempotent-import@example.com")
+    headers["Idempotency-Key"] = "customer-import-001"
+    rows = {"rows": [
+        {"name": "Idempotent Customer", "kind": "commercial", "email": "idem@example.com"},
+    ]}
+
+    first = client.post("/api/v1/customers/imports", headers=headers, json=rows)
+    assert first.status_code == 201, first.text
+    first_job = first.json()
+
+    replay = client.post("/api/v1/customers/imports", headers=headers, json=rows)
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["id"] == first_job["id"]
+
+    changed = client.post("/api/v1/customers/imports", headers=headers, json={"rows": [
+        {"name": "Different Customer", "email": "different@example.com"},
+    ]})
+    assert changed.status_code == 409, changed.text
+    assert changed.json()["error"]["code"] == "idempotency_key_reused"
+
+    customers = client.get("/api/v1/customers?limit=10", headers=headers)
+    assert customers.status_code == 200
+    assert [row["name"] for row in customers.json()] == ["Idempotent Customer"]
