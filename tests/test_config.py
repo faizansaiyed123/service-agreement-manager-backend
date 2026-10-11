@@ -12,6 +12,7 @@ def valid_production_settings(**overrides) -> Settings:
         "smtp_from_email": "no-reply@example.com",
         "smtp_starttls": True,
         "password_reset_url": "https://app.example.com/reset-password",
+        "webhook_encryption_key": "production-webhook-secret-value-that-is-at-least-32-chars",
     }
     values.update(overrides)
     return Settings(**values)
