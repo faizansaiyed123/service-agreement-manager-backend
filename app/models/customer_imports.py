@@ -11,7 +11,6 @@ from app.models.base import Timestamped, UUIDPrimaryKey
 class CustomerImportJob(Base, UUIDPrimaryKey, Timestamped):
     __tablename__ = "customer_import_jobs"
     __table_args__ = (
-        UniqueConstraint("company_id", "id", name="customer_import_job_company_id_id"),
         UniqueConstraint("company_id", "idempotency_key", name="customer_import_job_idempotency"),
     )
 
@@ -56,6 +55,7 @@ class CustomerImportRow(Base, UUIDPrimaryKey, Timestamped):
     customer_id: Mapped[UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("customers.id", ondelete="SET NULL"),
+        index=True,
     )
     error_code: Mapped[str | None] = mapped_column(String(64))
     error_message: Mapped[str | None] = mapped_column(Text)
