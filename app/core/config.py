@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     storage_backend: str = "local"
     storage_root: str = "./storage"
     storage_max_file_bytes: int = Field(default=25 * 1024 * 1024, ge=1, le=500 * 1024 * 1024)
+    webhook_encryption_key: str = "unsafe-development-webhook-key-change-this"
+    webhook_poll_seconds: int = Field(default=5, ge=1, le=300)
+    webhook_lease_seconds: int = Field(default=60, ge=5, le=3600)
+    webhook_default_max_attempts: int = Field(default=8, ge=1, le=20)
 
     @field_validator("cors_origins", mode="before")
     @classmethod
