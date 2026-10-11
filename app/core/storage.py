@@ -43,6 +43,9 @@ class LocalStorage:
             raise
         return size, digest.hexdigest()
 
+    def path_for(self, storage_key: str) -> Path:
+        return self._path(storage_key)
+
     def open(self, storage_key: str) -> BinaryIO:
         return self._path(storage_key).open("rb")
 
