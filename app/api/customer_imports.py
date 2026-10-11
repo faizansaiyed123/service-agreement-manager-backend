@@ -1,9 +1,12 @@
+import hashlib
+import json
 from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header, Response
 from pydantic import ValidationError
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_roles
@@ -15,6 +18,7 @@ from app.customer_import_schemas import (
     CustomerImportRead,
     CustomerImportRequest,
     CustomerImportRowInput,
+    CustomerImportRowRead,
 )
 from app.db.session import get_db
 from app.models import Company, Customer, CustomerImportJob, CustomerImportRow, User
@@ -87,6 +91,11 @@ def refresh_job_counts(db: Session, job: CustomerImportJob) -> None:
         job.completed_at = datetime.now(UTC)
 
 
+def import_request_hash(payload: CustomerImportRequest) -> str:
+    canonical = json.dumps(payload.rows, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 @router.post("/preview", response_model=CustomerImportPreview)
 def preview_import(
     payload: CustomerImportRequest,
@@ -98,20 +107,67 @@ def preview_import(
 @router.post("", response_model=CustomerImportRead, status_code=201)
 def create_import(
     payload: CustomerImportRequest,
+    response: Response,
     user: User = Depends(require_roles(*IMPORT_ROLES)),
     db: Session = Depends(get_db),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> CustomerImportJob:
     company = db.scalar(select(Company).where(Company.id == user.company_id).with_for_update())
     if company is None or not company.is_active:
         raise DomainError(403, "company_inactive", "Company account is inactive")
+
+    normalized_key = idempotency_key.strip() if idempotency_key else None
+    if normalized_key == "":
+        normalized_key = None
+    if normalized_key and len(normalized_key) > 255:
+        raise DomainError(422, "invalid_idempotency_key", "Idempotency-Key must be 255 characters or fewer")
+
+    request_hash = import_request_hash(payload)
+    if normalized_key:
+        existing = db.scalar(select(CustomerImportJob).where(
+            CustomerImportJob.company_id == user.company_id,
+            CustomerImportJob.idempotency_key == normalized_key,
+        ))
+        if existing is not None:
+            if existing.request_hash != request_hash:
+                raise DomainError(
+                    409,
+                    "idempotency_key_reused",
+                    "The Idempotency-Key was already used with a different import request",
+                )
+            response.status_code = 200
+            return existing
+
     preview = preview_from_rows(payload.rows)
     job = CustomerImportJob(
         company_id=user.company_id,
         created_by_user_id=user.id,
         total_rows=preview.total_rows,
+        idempotency_key=normalized_key,
+        request_hash=request_hash if normalized_key else None,
     )
     db.add(job)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        if not normalized_key:
+            raise
+        existing = db.scalar(select(CustomerImportJob).where(
+            CustomerImportJob.company_id == user.company_id,
+            CustomerImportJob.idempotency_key == normalized_key,
+        ))
+        if existing is None:
+            raise
+        if existing.request_hash != request_hash:
+            raise DomainError(
+                409,
+                "idempotency_key_reused",
+                "The Idempotency-Key was already used with a different import request",
+            )
+        response.status_code = 200
+        return existing
+
     for item in preview.rows:
         row = CustomerImportRow(
             job_id=job.id,
