@@ -18,6 +18,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://sam:${POSTGRES_PASSWORD:-sam_dev_only}@db:5432/service_agreements
     ports: ["8000:8000"]
+    volumes: [attachments_data:/srv/app/storage]
     depends_on:
       db:
         condition: service_healthy
