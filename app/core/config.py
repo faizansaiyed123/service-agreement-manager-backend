@@ -62,6 +62,8 @@ class Settings(BaseSettings):
                 raise ValueError("DEBUG must be false in production")
             if self.jwt_secret_key == "unsafe-development-secret-change-this-please" or len(self.jwt_secret_key) < 48:
                 raise ValueError("Production requires a unique JWT_SECRET_KEY of at least 48 characters")
+            if self.webhook_encryption_key == "unsafe-development-webhook-key-change-this" or len(self.webhook_encryption_key) < 32:
+                raise ValueError("Production requires a unique WEBHOOK_ENCRYPTION_KEY of at least 32 characters")
             if not self.smtp_host or not self.smtp_from_email:
                 raise ValueError("Production requires SMTP_HOST and SMTP_FROM_EMAIL for account recovery delivery")
             if not self.smtp_starttls:
