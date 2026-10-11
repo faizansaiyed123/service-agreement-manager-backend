@@ -13,6 +13,7 @@ from app.api.deps import get_current_user, require_roles
 from app.billing_schemas import InvoiceBaseRead, InvoiceCreate, InvoiceEventRead, InvoiceLineInput, InvoiceRead, InvoiceUpdate, PaymentCreate, PaymentRead, VoidInvoice
 from app.core.errors import DomainError
 from app.db.session import get_db
+from app.webhook_service import publish_webhook_event
 from app.models import Agreement, Company, Customer, Invoice, InvoiceEvent, InvoiceLine, Payment, ServiceLocation, User
 
 router = APIRouter(prefix="/invoices", tags=["invoicing"])
@@ -42,6 +43,18 @@ def event(db: Session, invoice: Invoice, user_id: UUID, event_type: str, previou
         invoice_id=invoice.id, actor_user_id=user_id, event_type=event_type,
         from_status=previous, to_status=invoice.status, detail=detail, created_at=datetime.now(UTC),
     ))
+    webhook_detail = {"invoice_id": str(invoice.id), "from_status": previous, "to_status": invoice.status, "detail": detail}
+    if event_type == "invoice.created":
+        publish_webhook_event(db, invoice.company_id, "invoice.created", webhook_detail)
+    elif event_type == "invoice.issued":
+        publish_webhook_event(db, invoice.company_id, "invoice.issued", webhook_detail)
+        publish_webhook_event(db, invoice.company_id, "invoice.status_changed", webhook_detail)
+    elif event_type == "invoice.payment_recorded":
+        publish_webhook_event(db, invoice.company_id, "payment.received", webhook_detail)
+        if previous != invoice.status:
+            publish_webhook_event(db, invoice.company_id, "invoice.status_changed", webhook_detail)
+    elif previous is not None and previous != invoice.status:
+        publish_webhook_event(db, invoice.company_id, "invoice.status_changed", webhook_detail)
 
 
 def build_line(payload: InvoiceLineInput) -> InvoiceLine:
