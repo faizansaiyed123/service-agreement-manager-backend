@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.core.errors import DomainError
 from app.db.session import get_db
+from app.webhook_service import publish_webhook_event
 from app.models import Contact, Customer, ServiceLocation, User, Company
 from app.schemas import ContactCreate, ContactRead, CustomerCreate, CustomerRead, CustomerUpdate, ServiceLocationCreate, ServiceLocationRead
 
@@ -32,6 +33,10 @@ def create_customer(payload: CustomerCreate, user: User = Depends(get_current_us
         phone=payload.phone, notes=payload.notes,
     )
     db.add(customer)
+    db.flush()
+    publish_webhook_event(db, customer.company_id, "customer.created", {
+        "customer_id": str(customer.id), "customer_number": customer.customer_number, "name": customer.name,
+    })
     db.commit()
     db.refresh(customer)
     return customer
@@ -71,6 +76,9 @@ def update_customer(
         if isinstance(value, str) and not value.strip():
             raise DomainError(422, "invalid_field", f"{key} cannot be blank")
         setattr(customer, key, value)
+    publish_webhook_event(db, customer.company_id, "customer.updated", {
+        "customer_id": str(customer.id), "customer_number": customer.customer_number,
+    })
     db.commit()
     db.refresh(customer)
     return customer
@@ -80,6 +88,9 @@ def update_customer(
 def deactivate_customer(customer_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> Response:
     customer = scoped_customer(db, user.company_id, customer_id)
     customer.status = "inactive"
+    publish_webhook_event(db, customer.company_id, "customer.updated", {
+        "customer_id": str(customer.id), "customer_number": customer.customer_number, "status": customer.status,
+    })
     db.commit()
     return Response(status_code=204)
 
