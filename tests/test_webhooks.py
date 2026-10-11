@@ -3,7 +3,6 @@ import hmac
 import json
 from datetime import UTC, datetime
 
-from app.core.webhook_crypto import decrypt_secret
 from app.models import User, WebhookDelivery
 from app.webhook_service import publish_webhook_event
 from app.workers.webhooks import run_once, sign_payload
@@ -75,11 +74,9 @@ def test_webhook_publish_delivery_signing_and_tenant_isolation(client):
     assert created.status_code == 201, created.text
     created_body = created.json()
 
-    first_user = TestingSession().query(User).filter_by(email="webhook-one@example.com").one()
     db = TestingSession()
     try:
         user = db.query(User).filter_by(email="webhook-one@example.com").one()
-        assert user.id == first_user.id
         event_id = publish_webhook_event(
             db,
             user.company_id,
@@ -107,7 +104,6 @@ def test_webhook_publish_delivery_signing_and_tenant_isolation(client):
         assert ignored == []
     finally:
         db.close()
-        first_user = None
 
     second_view = client.get(
         f"/api/v1/webhooks/{created_body['id']}",
