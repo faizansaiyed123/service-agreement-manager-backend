@@ -8,7 +8,7 @@ Backend feature completion and final verification.
 - Company profile, users/roles, CRM customers/contacts/service locations, equipment and service catalog.
 - Agreements with immutable pricing snapshots, acceptance evidence, version history, audit events and explicit renewal offers.
 - Maintenance schedules, retry-safe occurrence generation, work orders, technician assignment, completion checklists and branch-aware dispatch.
-- Company branches with IANA time zones, weekly local business hours, dated closures, one-primary enforcement and automatic Head Office creation/backfill.
+- Company branches with IANA time zones, weekly local business hours, dated closures and one-primary enforcement; existing companies receive a backfilled Head Office branch.
 - Invoice lifecycle with immutable line pricing, tax/discount snapshots, idempotent payments, refunds, credits, balances, receivables reports and CSV exports.
 - Recurring invoice schedules with monthly/quarterly/semi-annual/annual generation, optional auto-issue and durable worker state.
 - Invoice PDF rendering and download.
