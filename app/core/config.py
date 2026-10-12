@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     sms_api_token: str | None = None
     sms_from: str | None = None
     sms_timeout_seconds: int = Field(default=10, ge=1, le=60)
+    sms_poll_seconds: int = Field(default=10, ge=1, le=300)
+    sms_lease_seconds: int = Field(default=60, ge=5, le=3600)
+    sms_default_max_attempts: int = Field(default=5, ge=1, le=10)
     billing_poll_seconds: int = Field(default=60, ge=5, le=3600)
 
     @field_validator("cors_origins", mode="before")
