@@ -7,47 +7,51 @@ Backend API for HVAC, plumbing and related-trade service businesses.
 - SQLAlchemy 2.x, PostgreSQL and Alembic
 - Pytest, HTTPX, Ruff and GitHub Actions
 - Docker Compose for local development
+- ReportLab for invoice PDFs
+- boto3 for S3-compatible attachment storage
 
 ## Local development
-Copy `.env.example` to `.env`, then start the stack:
+Copy .env.example to .env, then start the core stack:
 
-```sh
-docker compose up --build -d
-docker compose exec api alembic upgrade head
-docker compose exec api pytest
-docker compose exec api ruff check .
-```
+    docker compose up --build -d
 
-OpenAPI / Swagger: http://localhost:8000/docs  
-Liveness: http://localhost:8000/health/live  
+Run the full test/lint suite locally:
+
+    docker compose exec api pytest
+    docker compose exec api ruff check .
+    docker compose exec api alembic check
+
+OpenAPI / Swagger: http://localhost:8000/docs
+Liveness: http://localhost:8000/health/live
 Readiness: http://localhost:8000/health/ready
 
 ## API modules
-- Authentication, sessions, password change and password recovery: `/api/v1/auth`
-- Company profile and users: `/api/v1/companies/current`, `/api/v1/users`
-- Company branches, IANA time zones, local weekly business hours and dated closures: `/api/v1/branches`
-- Customers, contacts and service locations: `/api/v1/customers`
-- Equipment and catalog: `/api/v1/equipment`, `/api/v1/service-catalog`
-- Agreements and renewal offers: `/api/v1/agreements`
-- Maintenance schedules and work orders: `/api/v1/maintenance/schedules`, `/api/v1/work-orders`
-- Invoices and payments: `/api/v1/invoices`
-- Notification outbox: `/api/v1/notifications`
-- Operational reports: `/api/v1/reports`
-- CSV exports: `/api/v1/exports/customers.csv`, `invoices.csv`, `work-orders.csv`, `agreements.csv`
+- Authentication, sessions and password recovery: /api/v1/auth
+- Company profile and users: /api/v1/companies/current and /api/v1/users
+- Branches, local business hours and dated closures: /api/v1/branches
+- Customers, contacts, service locations and customer bulk imports: /api/v1/customers and /api/v1/customers/imports
+- Equipment and catalog: /api/v1/equipment and /api/v1/service-catalog
+- Agreements and renewal offers: /api/v1/agreements
+- Maintenance schedules and work orders: /api/v1/maintenance/schedules and /api/v1/work-orders
+- Invoices, payments, refunds, credits and PDFs: /api/v1/invoices
+- Recurring invoice schedules: /api/v1/recurring-invoices
+- Durable email notifications: /api/v1/notifications
+- Durable SMS queue: /api/v1/sms
+- Webhook endpoints and delivery history: /api/v1/webhooks
+- Attachments: /api/v1/attachments
+- Operational reports and CSV exports: /api/v1/reports and /api/v1/exports/*.csv
 
-Docker Compose starts the maintenance worker with the API and database. To run the email worker as well, configure `SMTP_HOST`, `SMTP_FROM_EMAIL`, and any required credentials, then start the email profile:
+## Workers
+Core Compose starts PostgreSQL, API, maintenance worker, billing worker and webhook worker.
+Optional profiles are email for SMTP delivery and sms for the HTTP SMS worker.
 
-```sh
-docker compose --profile email up --build -d
-```
+Example:
+    docker compose --profile email --profile sms up --build -d
 
-The maintenance worker processes due schedules in bounded batches, records generation failures, and prevents duplicate occurrences. Password recovery uses `PASSWORD_RESET_URL`, expiring hashed tokens and the email outbox; reset records are hidden from ordinary notification API reads. SMTP delivery has not been verified without an actual provider. No automatic recurring invoices are generated until agreement total-vs-installment pricing is explicitly defined.
+## Storage
+Attachments default to local storage at STORAGE_ROOT. S3-compatible storage can be enabled with STORAGE_BACKEND=s3 or s3-compatible plus the configured bucket and credentials.
 
 ## Verification
-GitHub Actions runs Ruff and Pytest and applies all Alembic migrations against a PostgreSQL 16 service. API tests currently use SQLite for speed; the migration step itself runs against PostgreSQL. Local setup success and production readiness should be verified in the target environment.
+GitHub Actions applies all Alembic migrations against PostgreSQL 16, runs Ruff, the full pytest suite, dedicated PostgreSQL concurrency tests and Docker Compose smoke checks.
 
-
-
-Branch business hours use the branch's configured IANA time zone and local wall-clock times. Weekdays are numbered Monday=0 through Sunday=6. A weekly-hours update must submit all seven days exactly once; a closed day has no opening or closing time. Dated branch closures represent full-day closures.
-
-Never use development secrets in production.
+Real SMTP/SMS/S3 provider delivery, production deployment, TLS/proxy setup, secret injection and operational monitoring still require target-environment credentials and infrastructure verification.
