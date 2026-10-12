@@ -25,6 +25,8 @@ class InvoiceCreate(BaseModel):
     invoice_date: date = Field(default_factory=date.today)
     due_date: date
     notes: str | None = Field(default=None, max_length=10000)
+    discount_percent: Decimal = Field(default=Decimal("0.00"), ge=0, le=100, max_digits=5, decimal_places=2)
+    tax_percent: Decimal = Field(default=Decimal("0.00"), ge=0, le=100, max_digits=5, decimal_places=2)
     lines: list[InvoiceLineInput] = Field(min_length=1, max_length=100)
 
     @model_validator(mode="after")
@@ -75,6 +77,10 @@ class InvoiceBaseRead(ORMModel):
     currency: str
     subtotal: Decimal
     total_amount: Decimal
+    discount_percent: Decimal
+    discount_amount: Decimal
+    tax_percent: Decimal
+    tax_amount: Decimal
     notes: str | None
     issued_at: datetime | None
     voided_at: datetime | None
@@ -106,8 +112,42 @@ class InvoiceRead(BaseModel):
     updated_at: datetime
     lines: list[InvoiceLineRead]
     amount_paid: Decimal
+    amount_refunded: Decimal
+    credits_applied: Decimal
     balance_due: Decimal
     is_overdue: bool
+
+
+class PaymentRefundCreate(BaseModel):
+    amount: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
+    refund_method: Literal["cash", "check", "bank_transfer", "card", "other"]
+    reference: str | None = Field(default=None, max_length=255)
+    reason: str = Field(min_length=3, max_length=2000)
+
+
+class InvoiceCreditCreate(BaseModel):
+    amount: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
+    reason: str = Field(min_length=3, max_length=2000)
+
+
+class PaymentRefundRead(ORMModel):
+    id: UUID
+    company_id: UUID
+    payment_id: UUID
+    amount: Decimal
+    refund_method: str
+    reference: str | None
+    reason: str
+    refunded_at: datetime
+
+
+class InvoiceCreditRead(ORMModel):
+    id: UUID
+    company_id: UUID
+    invoice_id: UUID
+    amount: Decimal
+    reason: str
+    created_at: datetime
 
 
 class PaymentRead(ORMModel):
