@@ -83,7 +83,7 @@ def test_recurring_invoice_schedule_generates_and_advances(client):
     location = client.post(
         f"/api/v1/customers/{customer['id']}/service-locations",
         headers=headers,
-        json={"name": "Recurring Site", "city": "Dallas"},
+        json={"name": "Recurring Site", "address_line1": "1 Recurring Way", "city": "Dallas"},
     ).json()
     schedule = client.post("/api/v1/recurring-invoices", headers=headers, json={
         "customer_id": customer["id"],
