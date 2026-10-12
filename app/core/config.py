@@ -78,10 +78,18 @@ class Settings(BaseSettings):
                 raise ValueError("Production requires a unique JWT_SECRET_KEY of at least 48 characters")
             if self.webhook_encryption_key == "unsafe-development-webhook-key-change-this" or len(self.webhook_encryption_key) < 32:
                 raise ValueError("Production requires a unique WEBHOOK_ENCRYPTION_KEY of at least 32 characters")
-            if self.storage_backend.lower() in {"s3", "s3-compatible"} and not self.storage_bucket:
-                raise ValueError("S3 storage requires STORAGE_BUCKET in production")
-            if self.sms_provider == "http" and (not self.sms_api_url or not self.sms_from):
-                raise ValueError("HTTP SMS provider requires SMS_API_URL and SMS_FROM")
+            if "*" in self.cors_origins:
+                raise ValueError("Production CORS_ORIGINS cannot contain wildcard origins when credentials are enabled")
+            if self.storage_backend.lower() in {"s3", "s3-compatible"}:
+                if not self.storage_bucket:
+                    raise ValueError("S3 storage requires STORAGE_BUCKET in production")
+                if self.storage_endpoint_url and urlsplit(self.storage_endpoint_url).scheme != "https":
+                    raise ValueError("Production S3-compatible storage endpoints must use HTTPS")
+            if self.sms_provider == "http":
+                if not self.sms_api_url or not self.sms_from:
+                    raise ValueError("HTTP SMS provider requires SMS_API_URL and SMS_FROM")
+                if urlsplit(self.sms_api_url).scheme != "https":
+                    raise ValueError("Production SMS_API_URL must use HTTPS")
             if not self.smtp_host or not self.smtp_from_email:
                 raise ValueError("Production requires SMTP_HOST and SMTP_FROM_EMAIL for account recovery delivery")
             if not self.smtp_starttls:
