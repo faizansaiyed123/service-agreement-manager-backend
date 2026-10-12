@@ -68,17 +68,19 @@ def run_once(
                             db.flush()
                             already_exists = True
                         else:
-                            validate_context(
+                            _, _, branch_id = validate_context(
                                 db,
                                 schedule.company_id,
                                 schedule.customer_id,
                                 schedule.service_location_id,
-                                schedule.equipment_id,
-                                schedule.agreement_id,
-                                occurrence,
+                                branch_id=schedule.branch_id,
+                                equipment_id=schedule.equipment_id,
+                                agreement_id=schedule.agreement_id,
+                                for_date=occurrence,
                             )
                             work_order = WorkOrder(
                                 company_id=schedule.company_id,
+                                branch_id=branch_id,
                                 customer_id=schedule.customer_id,
                                 service_location_id=schedule.service_location_id,
                                 equipment_id=schedule.equipment_id,
