@@ -61,7 +61,7 @@ def run_once(session_factory: type[Session] = SessionLocal, *, batch_size: int =
 
 
 def run_forever(poll_seconds: int | None = None) -> None:
-    interval = poll_seconds or get_settings().webhook_poll_seconds
+    interval = poll_seconds or get_settings().billing_poll_seconds
     while True:
         try:
             run_once()
