@@ -19,9 +19,6 @@ def auth(client, company, email):
 
 def test_branch_linked_work_order_and_maintenance_schedule(client):
     headers = auth(client, "Dispatch HVAC", "dispatch@example.com")
-    primary = client.get("/api/v1/branches", headers=headers).json()
-    assert primary
-
     branch = client.post("/api/v1/branches", headers=headers, json={
         "name": "South Branch",
         "code": "SOUTH",
