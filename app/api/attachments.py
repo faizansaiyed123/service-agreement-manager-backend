@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import quote
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
@@ -84,7 +85,7 @@ def upload_attachment(
     filename = Path(file.filename or "").name.strip()
     if not filename or filename in {".", ".."}:
         raise DomainError(422, "invalid_attachment_filename", "A valid attachment filename is required")
-    if "\x00" in filename:
+    if "\x00" in filename or "\r" in filename or "\n" in filename:
         raise DomainError(422, "invalid_attachment_filename", "The attachment filename contains an invalid character")
     if len(filename) > 255:
         raise DomainError(422, "invalid_attachment_filename", "Attachment filename must be 255 characters or fewer")
@@ -181,7 +182,7 @@ def download_attachment(
         backend.open(attachment.storage_key),
         media_type=attachment.content_type,
         headers={
-            "Content-Disposition": f'attachment; filename="{attachment.original_filename}"',
+            "Content-Disposition": f"attachment; filename*=UTF-8\'\'{quote(attachment.original_filename)}",
             "X-Attachment-SHA256": attachment.sha256,
         },
     )
