@@ -38,6 +38,8 @@ class InvoiceCreate(BaseModel):
 
 class InvoiceUpdate(BaseModel):
     invoice_date: date | None = None
+    discount_percent: Decimal | None = Field(default=None, ge=0, le=100, max_digits=5, decimal_places=2)
+    tax_percent: Decimal | None = Field(default=None, ge=0, le=100, max_digits=5, decimal_places=2)
     due_date: date | None = None
     notes: str | None = Field(default=None, max_length=10000)
     lines: list[InvoiceLineInput] | None = Field(default=None, min_length=1, max_length=100)
