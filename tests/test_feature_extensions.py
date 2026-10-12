@@ -1,4 +1,5 @@
 from datetime import date
+from uuid import UUID
 
 from conftest import TestingSession
 from app.core.config import get_settings
@@ -102,7 +103,7 @@ def test_sms_provider_queue_and_fake_delivery(client):
         assert run_sms_once(session_factory=TestingSession, sender=sender) == 1
         db = TestingSession()
         try:
-            row = db.get(SmsOutbox, response.json()["id"])
+            row = db.get(SmsOutbox, UUID(response.json()["id"]))
             assert row is not None
             assert row.status == "sent"
             assert row.provider_message_id == "sms-msg-1"
