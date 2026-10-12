@@ -81,3 +81,28 @@ def test_customer_search_pagination_and_deactivation(client):
     assert client.delete(f"/api/v1/customers/{customer_id}", headers=headers).status_code == 204
     active = client.get("/api/v1/customers?status=active", headers=headers)
     assert all(item["id"] != customer_id for item in active.json())
+
+
+
+def test_company_profile_validates_timezone_and_currency(client):
+    auth = register(
+        client, "Company Profile HVAC", "Owner", "company-profile@example.com",
+        "correct-horse-battery-42",
+    )
+    headers = {"Authorization": f"Bearer {auth['access_token']}"}
+
+    invalid = client.patch(
+        "/api/v1/companies/current",
+        headers=headers,
+        json={"timezone": "Not/AZone"},
+    )
+    assert invalid.status_code == 422
+
+    updated = client.patch(
+        "/api/v1/companies/current",
+        headers=headers,
+        json={"timezone": "Asia/Kolkata", "currency": "inr"},
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["timezone"] == "Asia/Kolkata"
+    assert updated.json()["currency"] == "INR"
