@@ -1,5 +1,5 @@
 from calendar import monthrange
-from datetime import UTC, date, datetime
+from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 
 from sqlalchemy import select
