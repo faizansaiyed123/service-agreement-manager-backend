@@ -33,7 +33,7 @@ def test_branch_linked_work_order_and_maintenance_schedule(client):
     location = client.post(
         f"/api/v1/customers/{customer['id']}/service-locations",
         headers=headers,
-        json={"name": "Dispatch Site", "city": "Austin"},
+        json={"name": "Dispatch Site", "address_line1": "1 Dispatch Way", "city": "Austin"},
     ).json()
 
     order = client.post("/api/v1/work-orders", headers=headers, json={
