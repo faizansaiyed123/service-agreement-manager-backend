@@ -28,7 +28,7 @@ def scoped(db: Session, company_id: UUID, schedule_id: UUID, lock: bool = False)
     return schedule
 
 
-def validate_refs(db: Session, user: User, payload: RecurringInvoiceCreate) -> Company:
+def validate_refs(db: Session, user: User, payload: RecurringInvoiceCreate) -> tuple[Company, UUID | None]:
     company = db.get(Company, user.company_id)
     if company is None or not company.is_active:
         raise DomainError(403, "company_inactive", "Company account is inactive")
@@ -39,6 +39,7 @@ def validate_refs(db: Session, user: User, payload: RecurringInvoiceCreate) -> C
     ))
     if customer is None:
         raise DomainError(404, "customer_not_found", "Active customer not found")
+    location_id = payload.service_location_id
     if payload.agreement_id is not None:
         agreement = db.scalar(select(Agreement).where(
             Agreement.id == payload.agreement_id,
@@ -48,18 +49,20 @@ def validate_refs(db: Session, user: User, payload: RecurringInvoiceCreate) -> C
         ))
         if agreement is None:
             raise DomainError(404, "agreement_not_found", "A matching current agreement was not found")
-        if payload.service_location_id is not None and payload.service_location_id != agreement.service_location_id:
+        if location_id is None:
+            location_id = agreement.service_location_id
+        elif location_id != agreement.service_location_id:
             raise DomainError(422, "agreement_location_mismatch", "Recurring invoice location must match the linked agreement")
-    if payload.service_location_id is not None:
+    if location_id is not None:
         location = db.scalar(select(ServiceLocation).where(
-            ServiceLocation.id == payload.service_location_id,
+            ServiceLocation.id == location_id,
             ServiceLocation.company_id == user.company_id,
             ServiceLocation.customer_id == payload.customer_id,
             ServiceLocation.is_active.is_(True),
         ))
         if location is None:
             raise DomainError(404, "service_location_not_found", "Active service location not found")
-    return company
+    return company, location_id
 
 
 @router.post("", response_model=RecurringInvoiceRead, status_code=201)
@@ -68,11 +71,11 @@ def create_schedule(
     user: User = Depends(require_roles(*ROLES)),
     db: Session = Depends(get_db),
 ) -> RecurringInvoiceSchedule:
-    company = validate_refs(db, user, payload)
+    company, location_id = validate_refs(db, user, payload)
     schedule = RecurringInvoiceSchedule(
         company_id=user.company_id,
         customer_id=payload.customer_id,
-        service_location_id=payload.service_location_id,
+        service_location_id=location_id,
         agreement_id=payload.agreement_id,
         created_by_user_id=user.id,
         name=payload.name,
