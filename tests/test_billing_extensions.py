@@ -107,3 +107,61 @@ def test_recurring_invoice_schedule_generates_and_advances(client):
     assert refreshed.status_code == 200
     assert refreshed.json()["last_invoice_id"] == invoices[0]["id"]
     assert refreshed.json()["next_invoice_date"] != date.today().isoformat()
+
+
+
+def test_recurring_invoice_inherits_agreement_service_location(client):
+    owner = client.post("/api/v1/auth/register", json={
+        "company_name": "Recurring Agreement HVAC",
+        "full_name": "Recurring Agreement Owner",
+        "email": "recurring-agreement@example.com",
+        "password": "correct-horse-battery-42",
+    }).json()
+    headers = {"Authorization": f"Bearer {owner['access_token']}"}
+    customer = client.post("/api/v1/customers", headers=headers, json={"name": "Agreement Customer"}).json()
+    location = client.post(
+        f"/api/v1/customers/{customer['id']}/service-locations",
+        headers=headers,
+        json={"name": "Agreement Site", "address_line1": "1 Agreement Way", "city": "Dallas"},
+    ).json()
+
+    agreement = client.post("/api/v1/agreements", headers=headers, json={
+        "customer_id": customer["id"],
+        "service_location_id": location["id"],
+        "title": "Maintenance Agreement",
+        "start_date": date.today().isoformat(),
+        "end_date": (date.today() + timedelta(days=365)).isoformat(),
+        "billing_frequency": "monthly",
+        "lines": [{
+            "service_code": "MAINT",
+            "name": "Maintenance",
+            "quantity": "1",
+            "unit_price": "250.00",
+        }],
+    })
+    assert agreement.status_code == 201, agreement.text
+    proposed = client.post(f"/api/v1/agreements/{agreement.json()['id']}/propose", headers=headers)
+    assert proposed.status_code == 200, proposed.text
+    accepted = client.post(
+        f"/api/v1/agreements/{agreement.json()['id']}/accept",
+        headers=headers,
+        json={"accepted_by_name": "Owner", "method": "manual"},
+    )
+    assert accepted.status_code == 200, accepted.text
+
+    schedule = client.post("/api/v1/recurring-invoices", headers=headers, json={
+        "customer_id": customer["id"],
+        "agreement_id": agreement.json()["id"],
+        "name": "Agreement recurring",
+        "frequency": "monthly",
+        "next_invoice_date": date.today().isoformat(),
+        "due_days": 15,
+        "lines": [{
+            "service_code": "MAINT",
+            "description": "Maintenance",
+            "quantity": "1",
+            "unit_price": "250.00",
+        }],
+    })
+    assert schedule.status_code == 201, schedule.text
+    assert schedule.json()["service_location_id"] == location["id"]
