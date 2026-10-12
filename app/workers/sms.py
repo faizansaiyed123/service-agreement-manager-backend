@@ -51,8 +51,18 @@ def run_once(session_factory=SessionLocal, *, sender=send_sms, batch_size: int =
             and_(SmsOutbox.status == "processing", SmsOutbox.locked_until <= now),
         )).order_by(SmsOutbox.next_attempt_at, SmsOutbox.created_at).with_for_update(skip_locked=True).limit(batch_size)).all())
         for sms in rows:
+            if sms.status == "processing":
+                previous = db.scalar(select(SmsAttempt).where(
+                    SmsAttempt.sms_id == sms.id,
+                    SmsAttempt.attempt_number == sms.attempt_count,
+                ))
+                if previous is not None and previous.status == "started":
+                    previous.status = "failed"
+                    previous.error_message = "Worker lease expired; delivery outcome is unknown"
+                    previous.finished_at = now
             if sms.attempt_count >= sms.max_attempts:
                 sms.status = "dead"
+                sms.locked_until = None
                 continue
             sms.attempt_count += 1
             sms.status = "processing"
@@ -74,7 +84,7 @@ def run_once(session_factory=SessionLocal, *, sender=send_sms, batch_size: int =
                 current = db.scalar(select(SmsOutbox).where(SmsOutbox.id == sms.id).with_for_update())
                 current_attempt = db.get(SmsAttempt, attempt.id)
                 if current is None or current_attempt is None:
-                    return len(claimed)
+                    continue
                 now = datetime.now(UTC)
                 current_attempt.status = "failed"
                 current_attempt.error_message = f"{type(exc).__name__}: {exc}"[:1000]
