@@ -69,3 +69,16 @@ def test_production_settings_require_secure_external_endpoints():
             sms_api_url="http://sms.example.com/send",
             sms_from="+15550000000",
         ).validate_production()
+
+
+
+def test_production_settings_reject_secret_placeholders():
+    with pytest.raises(ValueError, match="JWT_SECRET_KEY"):
+        valid_production_settings(
+            jwt_secret_key="replace-with-a-random-secret-of-at-least-64-characters-000000000000"
+        ).validate_production()
+
+    with pytest.raises(ValueError, match="WEBHOOK_ENCRYPTION_KEY"):
+        valid_production_settings(
+            webhook_encryption_key="replace-with-a-random-webhook-secret-of-at-least-64-characters"
+        ).validate_production()
