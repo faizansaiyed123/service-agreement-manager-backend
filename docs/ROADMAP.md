@@ -14,9 +14,9 @@ States: PLANNED, IN_PROGRESS, IMPLEMENTED, TESTING, VERIFIED, COMMITTED, PUSHED,
 10. Company branches, IANA timezone validation, local business hours, dated closures and single-primary invariant — VERIFIED; existing companies receive a backfilled Head Office branch, while new registrations keep branch creation explicit.
 11. Recoverable idempotent customer bulk import — VERIFIED.
 12. Attachments with local storage, persistent Docker volume, S3-compatible backend and safe streaming downloads — VERIFIED at application/test level; real object-storage delivery remains external verification.
-13. Signed webhook integrations with encrypted endpoint secrets, durable delivery/retry and domain event emission — VERIFIED at application/test level.
+13. Signed webhook integrations with encrypted endpoint secrets, durable delivery/retry and domain event emission — VERIFIED at application/test level, including recurring invoice creation/issuance events.
 14. Recurring invoice schedules and billing worker — VERIFIED.
 15. Durable SMS outbox/HTTP provider worker — VERIFIED at application/test level; real provider delivery remains external verification.
-16. Final security/concurrency/performance review and backend completion checkpoint — VERIFIED.
+16. Final security/concurrency/performance review and backend completion checkpoint — VERIFIED by final CI run 244.
 
 No production-readiness claim is made for external provider delivery or deployment until real provider credentials, deployed runtime, TLS/secrets and monitoring are verified.
