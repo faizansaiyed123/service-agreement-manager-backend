@@ -11,7 +11,7 @@ States: PLANNED, IN_PROGRESS, IMPLEMENTED, TESTING, VERIFIED, COMMITTED, PUSHED,
 7. Notification outbox and SMTP delivery worker — IMPLEMENTED; fake-provider tests green, real SMTP provider delivery remains external verification.
 8. Operational reports and safe CSV exports — VERIFIED.
 9. Production configuration validation and Docker Compose worker runtime — IMPLEMENTED; PostgreSQL migration/drift checks and Compose smoke are part of CI.
-10. Company branches, IANA timezone validation, local business hours, dated closures and single-primary invariant — IMPLEMENTED; default Head Office is now created for new companies and backfilled for existing companies.
+10. Company branches, IANA timezone validation, local business hours, dated closures and single-primary invariant — IMPLEMENTED; existing companies receive a backfilled Head Office branch, while new registrations keep branch creation explicit.
 11. Recoverable idempotent customer bulk import — VERIFIED.
 12. Attachments with local storage, persistent Docker volume, S3-compatible backend and safe streaming downloads — IMPLEMENTED; final combined CI verification in progress.
 13. Signed webhook integrations with encrypted endpoint secrets, durable delivery/retry and domain event emission — IMPLEMENTED; final combined CI verification in progress.
