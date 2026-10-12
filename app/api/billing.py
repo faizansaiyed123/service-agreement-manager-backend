@@ -5,6 +5,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Query, Response
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
@@ -14,6 +15,7 @@ from app.billing_schemas import InvoiceBaseRead, InvoiceCreate, InvoiceCreditCre
 from app.core.errors import DomainError
 from app.db.session import get_db
 from app.webhook_service import publish_webhook_event
+from app.services.invoice_pdf import render_invoice_pdf
 from app.models import Agreement, Company, Customer, Invoice, InvoiceCredit, InvoiceEvent, InvoiceLine, Payment, PaymentRefund, ServiceLocation, User
 
 router = APIRouter(prefix="/invoices", tags=["invoicing"])
@@ -243,6 +245,22 @@ def list_invoices(
         stmt = stmt.where(Invoice.due_date <= due_through)
     invoices = list(db.scalars(stmt.order_by(Invoice.invoice_date.desc(), Invoice.id).limit(limit).offset(offset)).all())
     return invoice_responses(db, invoices)
+
+
+@router.get("/{invoice_id}/pdf", response_class=StreamingResponse)
+def invoice_pdf(
+    invoice_id: UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    invoice = get_invoice(db, user.company_id, invoice_id)
+    customer = db.scalar(select(Customer).where(Customer.id == invoice.customer_id, Customer.company_id == user.company_id))
+    stream = render_invoice_pdf(invoice, customer_name=customer.name if customer else "Customer")
+    return StreamingResponse(
+        stream,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{invoice.invoice_number}.pdf"'},
+    )
 
 
 @router.get("/{invoice_id}", response_model=InvoiceRead)
