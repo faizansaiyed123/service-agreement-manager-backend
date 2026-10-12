@@ -58,7 +58,7 @@ def enqueue_sms(
         status="queued",
         scheduled_at=scheduled,
         next_attempt_at=max(scheduled, now),
-        max_attempts=settings.notification_default_max_attempts,
+        max_attempts=settings.sms_default_max_attempts,
     )
     db.add(row)
     try:
