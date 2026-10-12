@@ -1,6 +1,6 @@
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, timedelta
 
-from app.models import Invoice, RecurringInvoiceSchedule
+from conftest import TestingSession
 from app.workers.billing import run_once as run_recurring_once
 
 
@@ -11,9 +11,7 @@ def test_invoice_tax_discount_refund_credit_and_pdf(client):
         "email": "billing-extensions@example.com",
         "password": "correct-horse-battery-42",
     }).json()
-    headers = {"Authorization": f"Bearer {owner['access_token']}
-
-"}
+    headers = {"Authorization": f"Bearer {owner['access_token']}"}
     customer = client.post("/api/v1/customers", headers=headers, json={"name": "Adjustment Customer"}).json()
     location = client.post(
         f"/api/v1/customers/{customer['id']}/service-locations",
@@ -99,8 +97,7 @@ def test_recurring_invoice_schedule_generates_and_advances(client):
     })
     assert schedule.status_code == 201, schedule.text
 
-    assert run_recurring_once() >= 1
-    db = client.app.dependency_overrides  # keep this assertion entirely HTTP-driven below
+    assert run_recurring_once(session_factory=TestingSession) >= 1
     invoices = client.get("/api/v1/invoices", headers=headers).json()
     assert len(invoices) == 1
     assert invoices[0]["status"] == "issued"
