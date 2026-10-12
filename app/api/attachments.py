@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_roles
 from app.attachment_schemas import AttachmentEntityType, AttachmentRead, AttachmentUpdate
-from app.core.config import get_settings
 from app.core.errors import DomainError
 from app.core.storage import StorageLimitExceeded, build_storage
 from app.db.session import get_db
