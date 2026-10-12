@@ -1,7 +1,6 @@
 import hashlib
 import json
 from datetime import UTC, datetime
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Response
 from sqlalchemy import select
