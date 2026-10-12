@@ -6,9 +6,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.billing_schemas import InvoiceLineInput
+from app.models import InvoiceLine
 from app.core.errors import DomainError
-from app.models import Company, Customer, Invoice, RecurringInvoiceSchedule, ServiceLocation
-from app.api.billing import build_line, recalculate
+from app.models import Company, Customer, Invoice, InvoiceLine, RecurringInvoiceSchedule, ServiceLocation
 
 
 def add_months(value: date, months: int) -> date:
@@ -21,6 +21,27 @@ def add_months(value: date, months: int) -> date:
 
 def next_recurring_date(value: date, frequency: str) -> date:
     return add_months(value, {"monthly": 1, "quarterly": 3, "semi_annual": 6, "annual": 12}[frequency])
+
+
+def build_line(payload: InvoiceLineInput) -> InvoiceLine:
+    from decimal import ROUND_HALF_UP
+    total = (payload.quantity * payload.unit_price).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return InvoiceLine(
+        service_code=payload.service_code.upper(),
+        description=payload.description.strip(),
+        details=payload.details,
+        quantity=payload.quantity,
+        unit_price=payload.unit_price,
+        line_total=total,
+    )
+
+
+def recalculate(invoice: Invoice) -> None:
+    invoice.subtotal = sum((line.line_total for line in invoice.lines), Decimal("0.00")).quantize(Decimal("0.01"))
+    invoice.discount_amount = (invoice.subtotal * invoice.discount_percent / Decimal("100")).quantize(Decimal("0.01"), rounding=__import__("decimal").ROUND_HALF_UP)
+    taxable = max(invoice.subtotal - invoice.discount_amount, Decimal("0.00"))
+    invoice.tax_amount = (taxable * invoice.tax_percent / Decimal("100")).quantize(Decimal("0.01"), rounding=__import__("decimal").ROUND_HALF_UP)
+    invoice.total_amount = (taxable + invoice.tax_amount).quantize(Decimal("0.01"), rounding=__import__("decimal").ROUND_HALF_UP)
 
 
 def create_scheduled_invoice(db: Session, schedule: RecurringInvoiceSchedule) -> Invoice:
