@@ -52,10 +52,10 @@ jobs:
       - name: Prepare local environment
         run: cp .env.example .env
       - name: Start API and background workers
-        run: docker compose --profile email up --build --wait -d
+        run: docker compose --profile email --profile sms up --build --wait -d
       - name: Dump service logs if startup failed
         if: failure()
-        run: docker compose --profile email logs --no-color db api webhook-worker maintenance-worker notification-worker || true
+        run: docker compose --profile email --profile sms logs --no-color db api webhook-worker maintenance-worker notification-worker sms-worker || true
       - name: Verify database readiness through the API
         run: |
           python - <<'PY'
@@ -78,7 +78,7 @@ jobs:
               raise SystemExit(f"API readiness check failed: {last_error}")
           PY
       - name: Show service status
-        run: docker compose --profile email ps
+        run: docker compose --profile email --profile sms ps
       - name: Tear down containers
         if: always()
-        run: docker compose --profile email down -v
+        run: docker compose --profile email --profile sms down -v
