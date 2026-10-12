@@ -28,6 +28,17 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+  sms-worker:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://sam:${POSTGRES_PASSWORD:-sam_dev_only}@db:5432/service_agreements
+    depends_on:
+      api:
+        condition: service_healthy
+    profiles: ["sms"]
+    restart: unless-stopped
+    command: ["python", "-m", "app.workers.sms"]
   billing-worker:
     build: .
     env_file: .env
