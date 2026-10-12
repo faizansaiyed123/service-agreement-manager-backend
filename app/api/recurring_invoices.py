@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, require_roles
 from app.core.errors import DomainError
 from app.db.session import get_db
-from app.models import Company, Customer, RecurringInvoiceSchedule, ServiceLocation, User
+from app.models import Agreement, Company, Customer, RecurringInvoiceSchedule, ServiceLocation, User
 from app.recurring_schemas import RecurringInvoiceCreate, RecurringInvoiceRead, RecurringInvoiceUpdate
 
 router = APIRouter(prefix="/recurring-invoices", tags=["recurring-invoices"])
@@ -39,6 +39,17 @@ def validate_refs(db: Session, user: User, payload: RecurringInvoiceCreate) -> C
     ))
     if customer is None:
         raise DomainError(404, "customer_not_found", "Active customer not found")
+    if payload.agreement_id is not None:
+        agreement = db.scalar(select(Agreement).where(
+            Agreement.id == payload.agreement_id,
+            Agreement.company_id == user.company_id,
+            Agreement.customer_id == payload.customer_id,
+            Agreement.status.in_(("accepted", "active", "suspended")),
+        ))
+        if agreement is None:
+            raise DomainError(404, "agreement_not_found", "A matching current agreement was not found")
+        if payload.service_location_id is not None and payload.service_location_id != agreement.service_location_id:
+            raise DomainError(422, "agreement_location_mismatch", "Recurring invoice location must match the linked agreement")
     if payload.service_location_id is not None:
         location = db.scalar(select(ServiceLocation).where(
             ServiceLocation.id == payload.service_location_id,
