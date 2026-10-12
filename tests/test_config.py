@@ -49,3 +49,23 @@ def test_cors_origins_accept_comma_separated_and_json_environment_values():
 
     json_array = Settings(cors_origins='["https://app.example.com","https://admin.example.com"]')
     assert json_array.cors_origins == ["https://app.example.com", "https://admin.example.com"]
+
+
+
+def test_production_settings_require_secure_external_endpoints():
+    with pytest.raises(ValueError, match="CORS_ORIGINS"):
+        valid_production_settings(cors_origins=["*"]).validate_production()
+
+    with pytest.raises(ValueError, match="S3-compatible storage endpoints"):
+        valid_production_settings(
+            storage_backend="s3-compatible",
+            storage_bucket="service-agreement-files",
+            storage_endpoint_url="http://minio.example.com",
+        ).validate_production()
+
+    with pytest.raises(ValueError, match="SMS_API_URL"):
+        valid_production_settings(
+            sms_provider="http",
+            sms_api_url="http://sms.example.com/send",
+            sms_from="+15550000000",
+        ).validate_production()
