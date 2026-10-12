@@ -39,7 +39,7 @@ def recalculate(invoice: Invoice) -> None:
     invoice.discount_amount = (invoice.subtotal * invoice.discount_percent / Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     taxable = max(invoice.subtotal - invoice.discount_amount, Decimal("0.00"))
     invoice.tax_amount = (taxable * invoice.tax_percent / Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-    invoice.total_amount = (taxable + invoice.tax_amount).quantize(Decimal("0.01"), rounding=__import__("decimal").ROUND_HALF_UP)
+    invoice.total_amount = (taxable + invoice.tax_amount).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def create_scheduled_invoice(db: Session, schedule: RecurringInvoiceSchedule) -> Invoice:
