@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import DomainError
 from app.webhook_service import publish_webhook_event
-from app.models import Agreement, Company, Customer, Equipment, MaintenanceSchedule, ServiceLocation, WorkOrder, WorkOrderEvent
+from app.models import Agreement, Company, CompanyBranch, Customer, Equipment, MaintenanceSchedule, ServiceLocation, WorkOrder, WorkOrderEvent
 
 MONTHS = {"monthly": 1, "quarterly": 3, "semi_annual": 6, "annual": 12}
 
@@ -17,16 +17,33 @@ def validate_context(
     company_id: UUID,
     customer_id: UUID,
     location_id: UUID,
+    branch_id: UUID | None = None,
     equipment_id: UUID | None = None,
     agreement_id: UUID | None = None,
     for_date: date | None = None,
-) -> tuple[Customer, ServiceLocation]:
+) -> tuple[Customer, ServiceLocation, UUID | None]:
     customer = db.scalar(select(Customer).where(
         Customer.id == customer_id,
         Customer.company_id == company_id,
     ))
     if customer is None or customer.status != "active":
         raise DomainError(404, "customer_not_found", "Active customer not found")
+    branch = None
+    if branch_id is None:
+        branch = db.scalar(select(CompanyBranch.id).where(
+            CompanyBranch.company_id == company_id,
+            CompanyBranch.is_primary.is_(True),
+            CompanyBranch.is_active.is_(True),
+        ))
+    else:
+        branch = db.scalar(select(CompanyBranch.id).where(
+            CompanyBranch.id == branch_id,
+            CompanyBranch.company_id == company_id,
+            CompanyBranch.is_active.is_(True),
+        ))
+        if branch is None:
+            raise DomainError(404, "branch_not_found", "Active company branch not found")
+
     location = db.scalar(select(ServiceLocation).where(
         ServiceLocation.id == location_id,
         ServiceLocation.company_id == company_id,
@@ -57,7 +74,7 @@ def validate_context(
             raise DomainError(409, "agreement_not_active", "An active matching agreement is required")
         if for_date is not None and not (agreement.start_date <= for_date <= agreement.end_date):
             raise DomainError(409, "agreement_out_of_term", "The scheduled date is outside the agreement term")
-    return customer, location
+    return customer, location, branch
 
 
 def add_order_event(
@@ -143,10 +160,11 @@ def generate_scheduled_occurrence(
 
     validate_context(
         db, company_id, schedule.customer_id, schedule.service_location_id,
-        schedule.equipment_id, schedule.agreement_id, occurrence_date,
+        schedule.branch_id, schedule.equipment_id, schedule.agreement_id, occurrence_date,
     )
     order = WorkOrder(
         company_id=company_id,
+        branch_id=schedule.branch_id,
         customer_id=schedule.customer_id,
         service_location_id=schedule.service_location_id,
         equipment_id=schedule.equipment_id,
