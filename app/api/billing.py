@@ -10,11 +10,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_user, require_roles
-from app.billing_schemas import InvoiceBaseRead, InvoiceCreate, InvoiceEventRead, InvoiceLineInput, InvoiceRead, InvoiceUpdate, PaymentCreate, PaymentRead, VoidInvoice
+from app.billing_schemas import InvoiceBaseRead, InvoiceCreate, InvoiceCreditCreate, InvoiceCreditRead, InvoiceEventRead, InvoiceLineInput, InvoiceRead, InvoiceUpdate, PaymentCreate, PaymentRead, PaymentRefundCreate, PaymentRefundRead, VoidInvoice
 from app.core.errors import DomainError
 from app.db.session import get_db
 from app.webhook_service import publish_webhook_event
-from app.models import Agreement, Company, Customer, Invoice, InvoiceEvent, InvoiceLine, Payment, ServiceLocation, User
+from app.models import Agreement, Company, Customer, Invoice, InvoiceCredit, InvoiceEvent, InvoiceLine, Payment, PaymentRefund, ServiceLocation, User
 
 router = APIRouter(prefix="/invoices", tags=["invoicing"])
 CENT = Decimal("0.01")
@@ -67,28 +67,72 @@ def build_line(payload: InvoiceLineInput) -> InvoiceLine:
 
 def recalculate(invoice: Invoice) -> None:
     invoice.subtotal = sum((line.line_total for line in invoice.lines), Decimal("0.00")).quantize(CENT)
-    # Tax and discounts are deliberately absent until company tax configuration is implemented.
-    invoice.total_amount = invoice.subtotal
+    invoice.discount_percent = Decimal(invoice.discount_percent or 0).quantize(Decimal("0.01"))
+    invoice.tax_percent = Decimal(invoice.tax_percent or 0).quantize(Decimal("0.01"))
+    invoice.discount_amount = (invoice.subtotal * invoice.discount_percent / Decimal("100")).quantize(CENT, rounding=ROUND_HALF_UP)
+    taxable = max(invoice.subtotal - invoice.discount_amount, Decimal("0.00"))
+    invoice.tax_amount = (taxable * invoice.tax_percent / Decimal("100")).quantize(CENT, rounding=ROUND_HALF_UP)
+    invoice.total_amount = (taxable + invoice.tax_amount).quantize(CENT, rounding=ROUND_HALF_UP)
+
+
+def invoice_adjustments(db: Session, invoice_ids: list[UUID]) -> tuple[dict[UUID, Decimal], dict[UUID, Decimal], dict[UUID, Decimal]]:
+    paid_rows = db.execute(
+        select(Payment.invoice_id, func.sum(Payment.amount))
+        .where(Payment.invoice_id.in_(invoice_ids))
+        .group_by(Payment.invoice_id)
+    ).all()
+    payment_ids = [row[0] for row in db.execute(
+        select(Payment.id).where(Payment.invoice_id.in_(invoice_ids))
+    ).all()]
+    refunded_rows = db.execute(
+        select(Payment.invoice_id, func.sum(PaymentRefund.amount))
+        .join(PaymentRefund, PaymentRefund.payment_id == Payment.id)
+        .where(Payment.invoice_id.in_(invoice_ids))
+        .group_by(Payment.invoice_id)
+    ).all() if payment_ids else []
+    credit_rows = db.execute(
+        select(InvoiceCredit.invoice_id, func.sum(InvoiceCredit.amount))
+        .where(InvoiceCredit.invoice_id.in_(invoice_ids))
+        .group_by(InvoiceCredit.invoice_id)
+    ).all()
+    paid = {invoice_id: (amount or Decimal("0.00")) for invoice_id, amount in paid_rows}
+    refunded = {invoice_id: (amount or Decimal("0.00")) for invoice_id, amount in refunded_rows}
+    credits = {invoice_id: (amount or Decimal("0.00")) for invoice_id, amount in credit_rows}
+    return paid, refunded, credits
+
+
+def refresh_invoice_status(db: Session, invoice: Invoice) -> None:
+    if invoice.status == "void":
+        return
+    paid, refunded, credits = invoice_adjustments(db, [invoice.id])
+    net_paid = paid.get(invoice.id, Decimal("0.00")) - refunded.get(invoice.id, Decimal("0.00"))
+    covered = net_paid + credits.get(invoice.id, Decimal("0.00"))
+    if covered >= invoice.total_amount:
+        invoice.status = "paid"
+    elif covered > 0:
+        invoice.status = "partially_paid"
+    else:
+        invoice.status = "issued"
 
 
 def invoice_responses(db: Session, invoices: list[Invoice]) -> list[InvoiceRead]:
     if not invoices:
         return []
     invoice_ids = [invoice.id for invoice in invoices]
-    payments = db.execute(
-        select(Payment.invoice_id, func.sum(Payment.amount))
-        .where(Payment.invoice_id.in_(invoice_ids))
-        .group_by(Payment.invoice_id)
-    ).all()
-    paid_by_invoice = {invoice_id: (amount or Decimal("0.00")) for invoice_id, amount in payments}
+    paid_by_invoice, refunded_by_invoice, credits_by_invoice = invoice_adjustments(db, invoice_ids)
     result: list[InvoiceRead] = []
     today = utc_today()
     for invoice in invoices:
         base = InvoiceBaseRead.model_validate(invoice).model_dump()
         paid = paid_by_invoice.get(invoice.id, Decimal("0.00"))
-        balance = max(invoice.total_amount - paid, Decimal("0.00"))
+        refunded = refunded_by_invoice.get(invoice.id, Decimal("0.00"))
+        credits = credits_by_invoice.get(invoice.id, Decimal("0.00"))
+        net_paid = paid - refunded
+        balance = max(invoice.total_amount - net_paid - credits, Decimal("0.00"))
         base.update(
-            amount_paid=paid,
+            amount_paid=max(net_paid, Decimal("0.00")),
+            amount_refunded=refunded,
+            credits_applied=credits,
             balance_due=balance,
             is_overdue=invoice.status in {"issued", "partially_paid"} and invoice.due_date < today,
         )
@@ -165,6 +209,7 @@ def create_invoice(payload: InvoiceCreate, user: User = Depends(require_roles(*I
         agreement_id=payload.agreement_id, invoice_number=f"INV-{company.invoice_sequence:06d}",
         status="draft", invoice_date=payload.invoice_date, due_date=payload.due_date,
         currency=company.currency, notes=payload.notes,
+        discount_percent=payload.discount_percent, tax_percent=payload.tax_percent,
     )
     db.add(invoice)
     db.flush()
@@ -228,7 +273,7 @@ def update_draft_invoice(
         invoice.lines.clear()
         db.flush()
         invoice.lines.extend(build_line(line) for line in lines)
-        recalculate(invoice)
+    recalculate(invoice)
     event(db, invoice, user.id, "invoice.draft_updated", detail={"fields": list(payload.model_dump(exclude_unset=True))})
     db.commit()
     return invoice_response(db, get_invoice(db, user.company_id, invoice.id))
@@ -259,7 +304,11 @@ def void_invoice(
     if invoice.status not in {"draft", "issued"}:
         raise DomainError(409, "invalid_invoice_transition", "Only unpaid draft or issued invoices can be voided")
     has_payments = db.scalar(select(func.count()).select_from(Payment).where(Payment.invoice_id == invoice.id)) or 0
-    if has_payments:
+    has_refunds_or_credits = (
+        (db.scalar(select(func.count()).select_from(PaymentRefund).join(Payment, PaymentRefund.payment_id == Payment.id).where(Payment.invoice_id == invoice.id)) or 0)
+        + (db.scalar(select(func.count()).select_from(InvoiceCredit).where(InvoiceCredit.invoice_id == invoice.id)) or 0)
+    )
+    if has_payments or has_refunds_or_credits:
         raise DomainError(409, "invoice_has_payments", "An invoice with payment history cannot be voided; use a future credit/refund workflow")
     previous = invoice.status
     invoice.status = "void"
@@ -290,7 +339,13 @@ def record_payment(
     if invoice.status not in {"issued", "partially_paid"}:
         raise DomainError(409, "invoice_not_payable", "Only issued invoices with outstanding balances can accept payments")
     paid = db.scalar(select(func.coalesce(func.sum(Payment.amount), 0)).where(Payment.invoice_id == invoice.id)) or Decimal("0.00")
-    balance = invoice.total_amount - paid
+    refunded = db.scalar(
+        select(func.coalesce(func.sum(PaymentRefund.amount), 0))
+        .join(Payment, PaymentRefund.payment_id == Payment.id)
+        .where(Payment.invoice_id == invoice.id)
+    ) or Decimal("0.00")
+    credits = db.scalar(select(func.coalesce(func.sum(InvoiceCredit.amount), 0)).where(InvoiceCredit.invoice_id == invoice.id)) or Decimal("0.00")
+    balance = invoice.total_amount - (paid - refunded) - credits
     if payload.amount > balance:
         raise DomainError(409, "overpayment", f"Payment exceeds the outstanding balance of {balance:.2f}")
     payment = Payment(
@@ -301,8 +356,8 @@ def record_payment(
     previous = invoice.status
     db.add(payment)
     db.flush()
-    new_paid = paid + payload.amount
-    invoice.status = "paid" if new_paid == invoice.total_amount else "partially_paid"
+    new_covered = (paid - refunded) + payload.amount + credits
+    invoice.status = "paid" if new_covered >= invoice.total_amount else "partially_paid"
     event(db, invoice, user.id, "invoice.payment_recorded", previous, {
         "payment_id": str(payment.id), "amount": str(payload.amount), "payment_method": payload.payment_method,
     })
@@ -333,3 +388,141 @@ def list_invoice_events(invoice_id: UUID, user: User = Depends(get_current_user)
     return list(db.scalars(select(InvoiceEvent).where(InvoiceEvent.invoice_id == invoice.id).order_by(
         InvoiceEvent.created_at, InvoiceEvent.id
     )).all())
+
+
+
+def adjustment_fingerprint(*parts: str) -> str:
+    canonical = json.dumps(parts, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+@router.post("/{invoice_id}/payments/{payment_id}/refunds", response_model=PaymentRefundRead, status_code=201)
+def refund_payment(
+    invoice_id: UUID,
+    payment_id: UUID,
+    payload: PaymentRefundCreate,
+    response: Response,
+    idempotency_key: str = Header(alias="Idempotency-Key", min_length=8, max_length=128),
+    user: User = Depends(require_roles("owner", "admin", "billing")),
+    db: Session = Depends(get_db),
+) -> PaymentRefund:
+    fingerprint = adjustment_fingerprint(str(invoice_id), str(payment_id), str(payload.amount), payload.refund_method, payload.reference or "", payload.reason)
+    existing = db.scalar(select(PaymentRefund).where(
+        PaymentRefund.company_id == user.company_id,
+        PaymentRefund.idempotency_key == idempotency_key,
+    ))
+    if existing is not None:
+        if existing.request_fingerprint != fingerprint:
+            raise DomainError(409, "idempotency_key_reused", "This Idempotency-Key was already used for a different refund")
+        response.status_code = 200
+        return existing
+
+    invoice = get_invoice(db, user.company_id, invoice_id, lock=True)
+    payment = db.scalar(select(Payment).where(
+        Payment.id == payment_id,
+        Payment.company_id == user.company_id,
+        Payment.invoice_id == invoice.id,
+    ).with_for_update())
+    if payment is None:
+        raise DomainError(404, "payment_not_found", "Payment not found")
+    refunded = db.scalar(select(func.coalesce(func.sum(PaymentRefund.amount), 0)).where(PaymentRefund.payment_id == payment.id)) or Decimal("0.00")
+    if payload.amount > payment.amount - refunded:
+        raise DomainError(409, "refund_exceeds_payment", "Refund exceeds the remaining refundable payment amount")
+
+    refund = PaymentRefund(
+        company_id=user.company_id, payment_id=payment.id, amount=payload.amount,
+        refund_method=payload.refund_method, reference=payload.reference,
+        reason=payload.reason.strip(), idempotency_key=idempotency_key,
+        request_fingerprint=fingerprint, created_by_user_id=user.id,
+    )
+    db.add(refund)
+    db.flush()
+    refresh_invoice_status(db, invoice)
+    event(db, invoice, user.id, "invoice.payment_refunded", invoice.status, {
+        "payment_id": str(payment.id), "refund_id": str(refund.id), "amount": str(payload.amount),
+    })
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        existing = db.scalar(select(PaymentRefund).where(
+            PaymentRefund.company_id == user.company_id,
+            PaymentRefund.idempotency_key == idempotency_key,
+        ))
+        if existing is not None and existing.request_fingerprint == fingerprint:
+            response.status_code = 200
+            return existing
+        raise DomainError(409, "refund_conflict", "The refund conflicts with another update; retry with the same Idempotency-Key") from exc
+    db.refresh(refund)
+    return refund
+
+
+@router.get("/{invoice_id}/payments/{payment_id}/refunds", response_model=list[PaymentRefundRead])
+def list_payment_refunds(
+    invoice_id: UUID,
+    payment_id: UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[PaymentRefund]:
+    invoice = get_invoice(db, user.company_id, invoice_id)
+    payment = db.scalar(select(Payment).where(Payment.id == payment_id, Payment.invoice_id == invoice.id))
+    if payment is None:
+        raise DomainError(404, "payment_not_found", "Payment not found")
+    return list(db.scalars(select(PaymentRefund).where(
+        PaymentRefund.payment_id == payment.id
+    ).order_by(PaymentRefund.refunded_at, PaymentRefund.id)).all())
+
+
+@router.post("/{invoice_id}/credits", response_model=InvoiceCreditRead, status_code=201)
+def create_invoice_credit(
+    invoice_id: UUID,
+    payload: InvoiceCreditCreate,
+    response: Response,
+    idempotency_key: str = Header(alias="Idempotency-Key", min_length=8, max_length=128),
+    user: User = Depends(require_roles("owner", "admin", "billing")),
+    db: Session = Depends(get_db),
+) -> InvoiceCredit:
+    fingerprint = adjustment_fingerprint(str(invoice_id), str(payload.amount), payload.reason)
+    existing = db.scalar(select(InvoiceCredit).where(
+        InvoiceCredit.company_id == user.company_id,
+        InvoiceCredit.idempotency_key == idempotency_key,
+    ))
+    if existing is not None:
+        if existing.request_fingerprint != fingerprint:
+            raise DomainError(409, "idempotency_key_reused", "This Idempotency-Key was already used for different credit content")
+        response.status_code = 200
+        return existing
+
+    invoice = get_invoice(db, user.company_id, invoice_id, lock=True)
+    if invoice.status == "void":
+        raise DomainError(409, "invoice_void", "Void invoices cannot receive credits")
+    current = invoice_response(db, invoice)
+    if payload.amount > current.balance_due:
+        raise DomainError(409, "credit_exceeds_balance", "Credit exceeds the invoice balance")
+    credit = InvoiceCredit(
+        company_id=user.company_id, invoice_id=invoice.id, amount=payload.amount,
+        reason=payload.reason.strip(), idempotency_key=idempotency_key,
+        request_fingerprint=fingerprint, created_by_user_id=user.id,
+    )
+    db.add(credit)
+    db.flush()
+    previous = invoice.status
+    refresh_invoice_status(db, invoice)
+    event(db, invoice, user.id, "invoice.credit_issued", previous, {
+        "credit_id": str(credit.id), "amount": str(payload.amount),
+    })
+    db.commit()
+    db.refresh(credit)
+    return credit
+
+
+@router.get("/{invoice_id}/credits", response_model=list[InvoiceCreditRead])
+def list_invoice_credits(
+    invoice_id: UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[InvoiceCredit]:
+    invoice = get_invoice(db, user.company_id, invoice_id)
+    return list(db.scalars(select(InvoiceCredit).where(
+        InvoiceCredit.invoice_id == invoice.id
+    ).order_by(InvoiceCredit.created_at, InvoiceCredit.id)).all())
