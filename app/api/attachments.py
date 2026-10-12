@@ -3,7 +3,7 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -11,7 +11,7 @@ from app.api.deps import get_current_user, require_roles
 from app.attachment_schemas import AttachmentEntityType, AttachmentRead, AttachmentUpdate
 from app.core.config import get_settings
 from app.core.errors import DomainError
-from app.core.storage import LocalStorage, StorageLimitExceeded
+from app.core.storage import StorageLimitExceeded, build_storage
 from app.db.session import get_db
 from app.models import (
     Agreement,
@@ -39,11 +39,11 @@ ENTITY_MODELS = {
 }
 
 
-def storage() -> LocalStorage:
-    settings = get_settings()
-    if settings.storage_backend.lower() != "local":
-        raise DomainError(503, "storage_backend_unavailable", "Configured attachment storage backend is unavailable")
-    return LocalStorage(settings.storage_root, settings.storage_max_file_bytes)
+def storage():
+    try:
+        return build_storage()
+    except ValueError as exc:
+        raise DomainError(503, "storage_backend_unavailable", str(exc)) from exc
 
 
 def scoped_attachment(db: Session, company_id: UUID, attachment_id: UUID) -> Attachment:
@@ -168,7 +168,7 @@ def get_attachment(
     return scoped_attachment(db, user.company_id, attachment_id)
 
 
-@router.get("/{attachment_id}/download", response_class=FileResponse)
+@router.get("/{attachment_id}/download")
 def download_attachment(
     attachment_id: UUID,
     user: User = Depends(get_current_user),
@@ -176,14 +176,15 @@ def download_attachment(
 ) -> FileResponse:
     attachment = scoped_attachment(db, user.company_id, attachment_id)
     backend = storage()
-    path = backend.path_for(attachment.storage_key)
-    if not path.is_file():
+    if not backend.exists(attachment.storage_key):
         raise DomainError(410, "attachment_storage_missing", "Attachment metadata exists but stored content is missing")
-    return FileResponse(
-        path=path,
+    return StreamingResponse(
+        backend.open(attachment.storage_key),
         media_type=attachment.content_type,
-        filename=attachment.original_filename,
-        headers={"X-Attachment-SHA256": attachment.sha256},
+        headers={
+            "Content-Disposition": f'attachment; filename="{attachment.original_filename}"',
+            "X-Attachment-SHA256": attachment.sha256,
+        },
     )
 
 
