@@ -14,6 +14,7 @@ class MaintenanceSchedule(Base, UUIDPrimaryKey, Timestamped):
         CheckConstraint("frequency in ('monthly','quarterly','semi_annual','annual')", name="valid_frequency"),
     )
     company_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), index=True, nullable=False)
+    branch_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), ForeignKey("company_branches.id", ondelete="RESTRICT"), index=True)
     customer_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("customers.id", ondelete="RESTRICT"), index=True, nullable=False)
     service_location_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("service_locations.id", ondelete="RESTRICT"), nullable=False)
     equipment_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), ForeignKey("equipment.id", ondelete="RESTRICT"))
@@ -39,6 +40,7 @@ class WorkOrder(Base, UUIDPrimaryKey, Timestamped):
         UniqueConstraint("maintenance_schedule_id", "occurrence_date", name="schedule_occurrence"),
     )
     company_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), index=True, nullable=False)
+    branch_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), ForeignKey("company_branches.id", ondelete="RESTRICT"), index=True)
     customer_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("customers.id", ondelete="RESTRICT"), index=True, nullable=False)
     service_location_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("service_locations.id", ondelete="RESTRICT"), nullable=False)
     equipment_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), ForeignKey("equipment.id", ondelete="RESTRICT"))
