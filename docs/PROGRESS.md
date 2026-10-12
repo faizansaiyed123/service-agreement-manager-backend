@@ -1,7 +1,7 @@
 # Progress
 
 ## Current milestone
-Backend feature completion and final verification.
+Backend feature completion — VERIFIED.
 
 ## Implemented backend surface
 - Tenant-scoped authentication, rotating refresh sessions, logout/session revocation, password change and hashed one-time password recovery.
@@ -20,10 +20,14 @@ Backend feature completion and final verification.
 - Domain webhook emission for customer, agreement, work-order, invoice and payment lifecycle events.
 - Production configuration validation, PostgreSQL 16 migration/drift checks, Docker Compose workers, readiness/liveness endpoints and CI coverage.
 
-## Verification
-- GitHub Actions runs Ruff, PostgreSQL 16 migration upgrade/current/check, full pytest, dedicated PostgreSQL concurrency tests and Docker Compose smoke.
-- Earlier dedicated PostgreSQL concurrency coverage passed for payment/schedule race scenarios; the current final run additionally covers the new billing, branch, SMS, attachment and webhook extensions.
-- Final verification is currently running on the latest main commit after the last security/reliability hardening changes.
+## Final verification
+GitHub Actions run 224 on commit 29ea07fd850e7699c0ba5947f5d6f3eaf27fdd1b completed successfully:
+- Ruff passed.
+- PostgreSQL 16 migrations and revision verification passed.
+- Alembic ORM/database drift check passed.
+- Full pytest suite passed.
+- Dedicated PostgreSQL concurrency tests passed.
+- Docker Compose API/worker startup, readiness and teardown smoke passed.
 
 ## External verification still required
 - Real SMTP provider credentials and provider-backed delivery.
