@@ -28,28 +28,29 @@ def run_once(session_factory: type[Session] = SessionLocal, *, batch_size: int =
         ).with_for_update(skip_locked=True).limit(batch_size)).all())
         for schedule in schedules:
             try:
-                invoice = create_scheduled_invoice(db, schedule)
-                if schedule.auto_issue:
-                    invoice.status = "issued"
-                    invoice.issued_at = now
-                schedule.last_invoice_id = invoice.id
-                schedule.last_run_at = now
-                schedule.last_run_error = None
-                schedule.next_invoice_date = next_recurring_date(schedule.next_invoice_date, schedule.frequency)
-                db.add(InvoiceEvent(
-                    invoice_id=invoice.id,
-                    actor_user_id=schedule.created_by_user_id,
-                    event_type="invoice.recurring_generated",
-                    from_status=None,
-                    to_status=invoice.status,
-                    detail={"recurring_schedule_id": str(schedule.id)},
-                ))
-                publish_webhook_event(db, schedule.company_id, "invoice.created", {
-                    "invoice_id": str(invoice.id),
-                    "source": "recurring_invoice",
-                    "recurring_schedule_id": str(schedule.id),
-                    "invoice_number": invoice.invoice_number,
-                })
+                with db.begin_nested():
+                    invoice = create_scheduled_invoice(db, schedule)
+                    if schedule.auto_issue:
+                        invoice.status = "issued"
+                        invoice.issued_at = now
+                    schedule.last_invoice_id = invoice.id
+                    schedule.last_run_at = now
+                    schedule.last_run_error = None
+                    schedule.next_invoice_date = next_recurring_date(schedule.next_invoice_date, schedule.frequency)
+                    db.add(InvoiceEvent(
+                        invoice_id=invoice.id,
+                        actor_user_id=schedule.created_by_user_id,
+                        event_type="invoice.recurring_generated",
+                        from_status=None,
+                        to_status=invoice.status,
+                        detail={"recurring_schedule_id": str(schedule.id)},
+                    ))
+                    publish_webhook_event(db, schedule.company_id, "invoice.created", {
+                        "invoice_id": str(invoice.id),
+                        "source": "recurring_invoice",
+                        "recurring_schedule_id": str(schedule.id),
+                        "invoice_number": invoice.invoice_number,
+                    })
                 created += 1
             except Exception as exc:
                 schedule.last_run_error = f"{type(exc).__name__}: {exc}"[:1000]
