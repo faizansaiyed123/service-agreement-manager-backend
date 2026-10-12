@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     storage_backend: str = "local"
     storage_root: str = "./storage"
     storage_max_file_bytes: int = Field(default=25 * 1024 * 1024, ge=1, le=500 * 1024 * 1024)
+    storage_bucket: str | None = None
+    storage_region: str = "us-east-1"
+    storage_endpoint_url: str | None = None
+    storage_access_key_id: str | None = None
+    storage_secret_access_key: str | None = None
     webhook_encryption_key: str = "unsafe-development-webhook-key-change-this"
     webhook_poll_seconds: int = Field(default=5, ge=1, le=300)
     webhook_lease_seconds: int = Field(default=60, ge=5, le=3600)
