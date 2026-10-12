@@ -45,12 +45,21 @@ def run_once(session_factory: type[Session] = SessionLocal, *, batch_size: int =
                         to_status=invoice.status,
                         detail={"recurring_schedule_id": str(schedule.id)},
                     ))
-                    publish_webhook_event(db, schedule.company_id, "invoice.created", {
+                    webhook_detail = {
                         "invoice_id": str(invoice.id),
                         "source": "recurring_invoice",
                         "recurring_schedule_id": str(schedule.id),
                         "invoice_number": invoice.invoice_number,
-                    })
+                        "status": invoice.status,
+                    }
+                    publish_webhook_event(db, schedule.company_id, "invoice.created", webhook_detail)
+                    if schedule.auto_issue:
+                        publish_webhook_event(db, schedule.company_id, "invoice.issued", webhook_detail)
+                        publish_webhook_event(db, schedule.company_id, "invoice.status_changed", {
+                            **webhook_detail,
+                            "from_status": "draft",
+                            "to_status": "issued",
+                        })
                 created += 1
             except Exception as exc:
                 schedule.last_run_error = f"{type(exc).__name__}: {exc}"[:1000]
