@@ -455,8 +455,9 @@ def refund_payment(
     )
     db.add(refund)
     db.flush()
+    previous = invoice.status
     refresh_invoice_status(db, invoice)
-    event(db, invoice, user.id, "invoice.payment_refunded", invoice.status, {
+    event(db, invoice, user.id, "invoice.payment_refunded", previous, {
         "payment_id": str(payment.id), "refund_id": str(refund.id), "amount": str(payload.amount),
     })
     try:
