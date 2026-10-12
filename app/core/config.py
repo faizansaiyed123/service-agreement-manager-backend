@@ -68,15 +68,20 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in stripped.split(",") if origin.strip()]
         return value
 
+    @staticmethod
+    def _is_secret_placeholder(value: str) -> bool:
+        normalized = value.strip().lower()
+        return any(marker in normalized for marker in ("replace-with-", "change-this", "unsafe-development"))
+
     def validate_production(self) -> None:
         if len(self.jwt_secret_key) < 32:
             raise ValueError("JWT_SECRET_KEY must contain at least 32 characters")
         if self.app_env.lower() == "production":
             if self.debug:
                 raise ValueError("DEBUG must be false in production")
-            if self.jwt_secret_key == "unsafe-development-secret-change-this-please" or len(self.jwt_secret_key) < 48:
+            if self._is_secret_placeholder(self.jwt_secret_key) or len(self.jwt_secret_key) < 48:
                 raise ValueError("Production requires a unique JWT_SECRET_KEY of at least 48 characters")
-            if self.webhook_encryption_key == "unsafe-development-webhook-key-change-this" or len(self.webhook_encryption_key) < 32:
+            if self._is_secret_placeholder(self.webhook_encryption_key) or len(self.webhook_encryption_key) < 32:
                 raise ValueError("Production requires a unique WEBHOOK_ENCRYPTION_KEY of at least 32 characters")
             if "*" in self.cors_origins:
                 raise ValueError("Production CORS_ORIGINS cannot contain wildcard origins when credentials are enabled")
