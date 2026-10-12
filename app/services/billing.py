@@ -38,7 +38,7 @@ def recalculate(invoice: Invoice) -> None:
     invoice.subtotal = sum((line.line_total for line in invoice.lines), Decimal("0.00")).quantize(Decimal("0.01"))
     invoice.discount_amount = (invoice.subtotal * invoice.discount_percent / Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     taxable = max(invoice.subtotal - invoice.discount_amount, Decimal("0.00"))
-    invoice.tax_amount = (taxable * invoice.tax_percent / Decimal("100")).quantize(Decimal("0.01"), rounding=__import__("decimal").ROUND_HALF_UP)
+    invoice.tax_amount = (taxable * invoice.tax_percent / Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     invoice.total_amount = (taxable + invoice.tax_amount).quantize(Decimal("0.01"), rounding=__import__("decimal").ROUND_HALF_UP)
 
 
