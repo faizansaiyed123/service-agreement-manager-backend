@@ -12,7 +12,7 @@ def test_openapi_document_is_available(client):
 
 
 def test_cors_allows_idempotency_key_and_exposes_backend_headers(client):
-    response = client.options(
+    preflight = client.options(
         "/api/v1/invoices",
         headers={
             "Origin": "http://localhost:3000",
@@ -20,7 +20,14 @@ def test_cors_allows_idempotency_key_and_exposes_backend_headers(client):
             "Access-Control-Request-Headers": "authorization,content-type,idempotency-key",
         },
     )
+    assert preflight.status_code == 200
+    assert "Idempotency-Key" in preflight.headers["access-control-allow-headers"]
+
+    response = client.get(
+        "/health/live",
+        headers={"Origin": "http://localhost:3000"},
+    )
     assert response.status_code == 200
-    assert "Idempotency-Key" in response.headers["access-control-allow-headers"]
-    assert "X-Request-ID" in response.headers["access-control-expose-headers"]
-    assert "X-Attachment-SHA256" in response.headers["access-control-expose-headers"]
+    exposed = response.headers["access-control-expose-headers"]
+    assert "X-Request-ID" in exposed
+    assert "X-Attachment-SHA256" in exposed
