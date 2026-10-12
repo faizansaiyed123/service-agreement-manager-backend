@@ -11,7 +11,7 @@ from app.core.config import get_settings
 from app.core.errors import DomainError
 from app.core.security import create_token, decode_token, hash_password, verify_password
 from app.db.session import get_db
-from app.models import AuthSession, BranchBusinessHours, Company, CompanyBranch, User
+from app.models import AuthSession, Company, User
 from app.schemas import LoginRequest, RefreshRequest, RegisterRequest, TokenPair, UserRead
 from app.user_schemas import PasswordChange
 
@@ -40,26 +40,6 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> TokenPa
     company = Company(name=payload.company_name.strip())
     db.add(company)
     db.flush()
-    branch = CompanyBranch(
-        company_id=company.id,
-        name="Head Office",
-        code="MAIN",
-        timezone=company.timezone,
-        country_code="US",
-        is_primary=True,
-        is_active=True,
-    )
-    db.add(branch)
-    db.flush()
-    db.add_all([
-        BranchBusinessHours(
-            branch_id=branch.id,
-            day_of_week=day,
-            is_closed=True,
-        )
-        for day in range(7)
-    ])
-
     user = User(company_id=company.id, email=email, full_name=payload.full_name.strip(),
                 password_hash=hash_password(payload.password), role="owner")
     db.add(user)
