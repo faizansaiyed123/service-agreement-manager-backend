@@ -26,7 +26,7 @@ def upgrade() -> None:
                 INSERT INTO company_branches
                 (id, company_id, name, code, timezone, country_code, is_primary, is_active, created_at, updated_at)
                 VALUES
-                (:id, :company_id, 'Head Office', 'HQ', :timezone, 'US', true, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                (:id, :company_id, 'Head Office', 'MAIN', :timezone, 'US', true, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             """),
             {
                 "id": branch_id,
