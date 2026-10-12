@@ -66,7 +66,7 @@ def run_once(session_factory=SessionLocal, *, sender=send_sms, batch_size: int =
                 continue
             sms.attempt_count += 1
             sms.status = "processing"
-            sms.locked_until = now + timedelta(seconds=get_settings().notification_lease_seconds)
+            sms.locked_until = now + timedelta(seconds=get_settings().sms_lease_seconds)
             attempt = SmsAttempt(sms_id=sms.id, attempt_number=sms.attempt_count, status="started", started_at=now)
             db.add(attempt)
             db.flush()
@@ -132,4 +132,4 @@ def run_forever() -> None:
             return
         except Exception:
             logger.exception("SMS worker iteration failed")
-        time.sleep(get_settings().notification_poll_seconds)
+        time.sleep(get_settings().sms_poll_seconds)
