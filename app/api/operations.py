@@ -35,9 +35,9 @@ def scoped_order(db: Session, company_id: UUID, order_id: UUID) -> WorkOrder:
 
 @schedules_router.post("", response_model=ScheduleRead, status_code=201)
 def create_schedule(payload: ScheduleCreate, user: User = Depends(require_roles("owner", "admin", "manager", "staff")), db: Session = Depends(get_db)) -> MaintenanceSchedule:
-    validate_context(db, user.company_id, payload.customer_id, payload.service_location_id, payload.equipment_id, payload.agreement_id, payload.next_due_date)
+    _, _, branch_id = validate_context(db, user.company_id, payload.customer_id, payload.service_location_id, payload.branch_id, payload.equipment_id, payload.agreement_id, payload.next_due_date)
     schedule = MaintenanceSchedule(
-        company_id=user.company_id, customer_id=payload.customer_id, service_location_id=payload.service_location_id,
+        company_id=user.company_id, branch_id=branch_id, customer_id=payload.customer_id, service_location_id=payload.service_location_id,
         equipment_id=payload.equipment_id, agreement_id=payload.agreement_id, created_by=user.id,
         name=payload.name, description=payload.description, frequency=payload.frequency,
         next_due_date=payload.next_due_date, checklist_template=payload.checklist_template,
@@ -113,9 +113,9 @@ def create_work_order(
     payload: WorkOrderCreate, user: User = Depends(require_roles("owner", "admin", "manager", "staff")),
     db: Session = Depends(get_db),
 ) -> WorkOrder:
-    validate_context(db, user.company_id, payload.customer_id, payload.service_location_id, payload.equipment_id, payload.agreement_id, payload.scheduled_for)
+    _, _, branch_id = validate_context(db, user.company_id, payload.customer_id, payload.service_location_id, payload.branch_id, payload.equipment_id, payload.agreement_id, payload.scheduled_for)
     order = WorkOrder(
-        company_id=user.company_id, customer_id=payload.customer_id, service_location_id=payload.service_location_id,
+        company_id=user.company_id, branch_id=branch_id, customer_id=payload.customer_id, service_location_id=payload.service_location_id,
         equipment_id=payload.equipment_id, agreement_id=payload.agreement_id,
         work_order_number=create_work_order_number(db, user.company_id), title=payload.title.strip(),
         description=payload.description, priority=payload.priority, scheduled_for=payload.scheduled_for,
@@ -132,7 +132,7 @@ def create_work_order(
 @work_orders_router.get("", response_model=list[WorkOrderRead])
 def list_work_orders(
     status: str | None = Query(default=None, pattern="^(scheduled|assigned|in_progress|completed|cancelled)$"),
-    customer_id: UUID | None = None, scheduled_from: date | None = None, scheduled_to: date | None = None,
+    customer_id: UUID | None = None, branch_id: UUID | None = None, scheduled_from: date | None = None, scheduled_to: date | None = None,
     limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0),
     user: User = Depends(get_current_user), db: Session = Depends(get_db),
 ) -> list[WorkOrder]:
@@ -143,6 +143,8 @@ def list_work_orders(
         stmt = stmt.where(WorkOrder.status == status)
     if customer_id:
         stmt = stmt.where(WorkOrder.customer_id == customer_id)
+    if branch_id:
+        stmt = stmt.where(WorkOrder.branch_id == branch_id)
     if scheduled_from:
         stmt = stmt.where(WorkOrder.scheduled_for >= scheduled_from)
     if scheduled_to:
