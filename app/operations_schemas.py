@@ -10,6 +10,7 @@ class ORMModel(BaseModel):
 
 
 class ScheduleCreate(BaseModel):
+    branch_id: UUID | None = None
     customer_id: UUID
     service_location_id: UUID
     equipment_id: UUID | None = None
@@ -43,6 +44,7 @@ class ScheduleUpdate(BaseModel):
 class ScheduleRead(ORMModel):
     id: UUID
     company_id: UUID
+    branch_id: UUID | None
     customer_id: UUID
     service_location_id: UUID
     equipment_id: UUID | None
@@ -65,6 +67,7 @@ class GenerateOccurrence(BaseModel):
 
 
 class WorkOrderCreate(BaseModel):
+    branch_id: UUID | None = None
     customer_id: UUID
     service_location_id: UUID
     equipment_id: UUID | None = None
@@ -128,6 +131,7 @@ class CancelWorkOrder(BaseModel):
 class WorkOrderRead(ORMModel):
     id: UUID
     company_id: UUID
+    branch_id: UUID | None
     customer_id: UUID
     service_location_id: UUID
     equipment_id: UUID | None
