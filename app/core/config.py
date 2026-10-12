@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     sms_api_token: str | None = None
     sms_from: str | None = None
     sms_timeout_seconds: int = Field(default=10, ge=1, le=60)
+    billing_poll_seconds: int = Field(default=60, ge=5, le=3600)
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -74,6 +75,8 @@ class Settings(BaseSettings):
                 raise ValueError("Production requires a unique JWT_SECRET_KEY of at least 48 characters")
             if self.webhook_encryption_key == "unsafe-development-webhook-key-change-this" or len(self.webhook_encryption_key) < 32:
                 raise ValueError("Production requires a unique WEBHOOK_ENCRYPTION_KEY of at least 32 characters")
+            if self.storage_backend.lower() in {"s3", "s3-compatible"} and not self.storage_bucket:
+                raise ValueError("S3 storage requires STORAGE_BUCKET in production")
             if self.sms_provider == "http" and (not self.sms_api_url or not self.sms_from):
                 raise ValueError("HTTP SMS provider requires SMS_API_URL and SMS_FROM")
             if not self.smtp_host or not self.smtp_from_email:
