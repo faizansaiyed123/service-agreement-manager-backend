@@ -106,6 +106,10 @@ class InvoiceRead(BaseModel):
     currency: str
     subtotal: Decimal
     total_amount: Decimal
+    discount_percent: Decimal
+    discount_amount: Decimal
+    tax_percent: Decimal
+    tax_amount: Decimal
     notes: str | None
     issued_at: datetime | None
     voided_at: datetime | None
