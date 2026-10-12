@@ -173,7 +173,7 @@ def download_attachment(
     attachment_id: UUID,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> FileResponse:
+) -> StreamingResponse:
     attachment = scoped_attachment(db, user.company_id, attachment_id)
     backend = storage()
     if not backend.exists(attachment.storage_key):
