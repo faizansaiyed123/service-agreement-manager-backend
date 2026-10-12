@@ -1,12 +1,11 @@
 from calendar import monthrange
 from datetime import UTC, date, datetime
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.billing_schemas import InvoiceLineInput
-from app.models import InvoiceLine
 from app.core.errors import DomainError
 from app.models import Company, Customer, Invoice, InvoiceLine, RecurringInvoiceSchedule, ServiceLocation
 
@@ -24,7 +23,6 @@ def next_recurring_date(value: date, frequency: str) -> date:
 
 
 def build_line(payload: InvoiceLineInput) -> InvoiceLine:
-    from decimal import ROUND_HALF_UP
     total = (payload.quantity * payload.unit_price).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     return InvoiceLine(
         service_code=payload.service_code.upper(),
@@ -38,7 +36,7 @@ def build_line(payload: InvoiceLineInput) -> InvoiceLine:
 
 def recalculate(invoice: Invoice) -> None:
     invoice.subtotal = sum((line.line_total for line in invoice.lines), Decimal("0.00")).quantize(Decimal("0.01"))
-    invoice.discount_amount = (invoice.subtotal * invoice.discount_percent / Decimal("100")).quantize(Decimal("0.01"), rounding=__import__("decimal").ROUND_HALF_UP)
+    invoice.discount_amount = (invoice.subtotal * invoice.discount_percent / Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     taxable = max(invoice.subtotal - invoice.discount_amount, Decimal("0.00"))
     invoice.tax_amount = (taxable * invoice.tax_percent / Decimal("100")).quantize(Decimal("0.01"), rounding=__import__("decimal").ROUND_HALF_UP)
     invoice.total_amount = (taxable + invoice.tax_amount).quantize(Decimal("0.01"), rounding=__import__("decimal").ROUND_HALF_UP)
