@@ -35,6 +35,11 @@ External provider/deployment verification is intentionally not claimed:
 ## Frontend
 Status: IN PROGRESS.
 
+### Verified frontend chunks so far
+- Foundation committed on frontend `main`: typed API client with access-token injection and refresh-token retry, session storage, protected routes, responsive app shell, authentication screens, live overview dashboard and customer CRM workflow.
+- Frontend CI workflow added to run the production build on `main` pushes and pull requests.
+- Local production build has not yet been independently executed because the environment has no GitHub/npm network access; the repository CI workflow is the source of remote build verification.
+
 Planned implementation order:
 1. Frontend foundation, authentication/session handling, routing and design system.
 2. Dashboard and CRM/customer workflows.
@@ -54,4 +59,4 @@ The frontend will use the real backend at `VITE_API_URL` (default `http://localh
 - This file is the persistent recovery checkpoint for the combined project.
 
 ## Current next task
-Build the frontend foundation and verify the first authenticated API flow against the existing backend contract.
+Implement the live Agreements workflow: listing, creation, lifecycle transitions, acceptance evidence, history/versions and renewal offers against the verified backend contract.
