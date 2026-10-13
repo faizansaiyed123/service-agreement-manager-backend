@@ -65,7 +65,7 @@ The frontend will use the real backend at `VITE_API_URL` (default `http://localh
 - This file is the persistent recovery checkpoint for the combined project.
 
 ## Current verified frontend checkpoint
-- Latest frontend `main` commit: `d913e0b90ea6537f88e15134be0e49b61393e12b`.
+- Latest frontend `main` progress checkpoint: `310020fce4c01d0be6207b5d972b16c470557c25` (includes product head `e280d4b8d317477f90b49bdcc125b1956983fce8`).
 - Static source scan across 17 frontend TS/TSX modules found no brace/parenthesis/label mismatches, no triple-quote corruption, no dangling `React.FormEvent` usage, and no TODO/FIXME markers.
 - Backend router audit confirmed frontend password recovery maps to the dedicated `/auth/forgot-password` and `/auth/reset-password` router.
 - Customer contacts/service locations, branch business hours/closures, administrator password reset, recurring billing creation, attachment workflows, integrations and reports are all wired to live backend routes.
