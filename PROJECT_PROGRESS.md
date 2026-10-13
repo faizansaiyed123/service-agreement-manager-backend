@@ -64,5 +64,17 @@ The frontend will use the real backend at `VITE_API_URL` (default `http://localh
 - Frontend branch: `main`
 - This file is the persistent recovery checkpoint for the combined project.
 
+## Current verified frontend checkpoint
+- Latest frontend `main` commit: `d913e0b90ea6537f88e15134be0e49b61393e12b`.
+- Static source scan across 17 frontend TS/TSX modules found no brace/parenthesis/label mismatches, no triple-quote corruption, no dangling `React.FormEvent` usage, and no TODO/FIXME markers.
+- Backend router audit confirmed frontend password recovery maps to the dedicated `/auth/forgot-password` and `/auth/reset-password` router.
+- Customer contacts/service locations, branch business hours/closures, administrator password reset, recurring billing creation, attachment workflows, integrations and reports are all wired to live backend routes.
+
+## Verification limitation
+- Backend CI Run 244 is the verified application checkpoint.
+- Frontend production build was not executable locally because npm dependencies are not installed and external package/network access is unavailable in this environment.
+- The frontend GitHub Actions workflow exists, but the GitHub connector returned no workflow-run/status records for the verification commits; therefore frontend CI is **not claimed as passing**.
+- A temporary CI-only PR (`#1`) was opened and closed after no status data became available; no product code was merged from that branch.
+
 ## Current next task
-Run a final contract/code review of every frontend module, fix any TypeScript/React issues found, then complete responsive/accessibility hardening and CI/build verification.
+Perform external frontend CI/build verification (or run `npm install && npm run build` in an environment with package/network access), then deploy the frontend/backend with real secrets/providers if desired.
