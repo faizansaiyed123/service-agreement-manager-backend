@@ -37,6 +37,12 @@ Status: IN PROGRESS.
 
 ### Verified frontend chunks so far
 - Foundation committed on frontend `main`: typed API client with access-token injection and refresh-token retry, session storage, protected routes, responsive app shell, authentication screens, live overview dashboard and customer CRM workflow.
+- Agreements: draft creation, propose/accept/activate/suspend/resume/cancel, acceptance evidence, version/event history and renewal offers.
+- Operations: work-order creation, technician assignment, start/complete/cancel, maintenance schedules/generation and branches.
+- Billing: invoice creation, issue/void, payments, refunds, credits, live balances and PDF download with idempotency keys.
+- Equipment and service catalog CRUD entry points.
+- Company/team/security settings and recurring-invoice controls.
+- Reports, tenant-scoped CSV exports, password recovery, customer CSV preview/import, reusable attachment upload/download/delete, and email/SMS/webhook integration views.
 - Frontend CI workflow added to run the production build on `main` pushes and pull requests.
 - Local production build has not yet been independently executed because the environment has no GitHub/npm network access; the repository CI workflow is the source of remote build verification.
 
@@ -59,4 +65,4 @@ The frontend will use the real backend at `VITE_API_URL` (default `http://localh
 - This file is the persistent recovery checkpoint for the combined project.
 
 ## Current next task
-Implement the live Agreements workflow: listing, creation, lifecycle transitions, acceptance evidence, history/versions and renewal offers against the verified backend contract.
+Run a final contract/code review of every frontend module, fix any TypeScript/React issues found, then complete responsive/accessibility hardening and CI/build verification.
