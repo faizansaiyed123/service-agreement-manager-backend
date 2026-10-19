@@ -53,6 +53,8 @@ jobs:
         run: |
           cp .env.production.example .env.production
           docker compose --env-file .env.production -f docker-compose.production.yml config --quiet
+      - name: Build production runtime image
+        run: docker compose --env-file .env.production -f docker-compose.production.yml build
       - name: Prepare local environment
         run: cp .env.example .env
       - name: Start API and background workers
