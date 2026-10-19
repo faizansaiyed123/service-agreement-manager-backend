@@ -49,6 +49,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate production Compose configuration
+        run: |
+          cp .env.production.example .env.production
+          docker compose --env-file .env.production -f docker-compose.production.yml config --quiet
       - name: Prepare local environment
         run: cp .env.example .env
       - name: Start API and background workers
