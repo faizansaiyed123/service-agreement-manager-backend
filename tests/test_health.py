@@ -31,3 +31,11 @@ def test_cors_allows_idempotency_key_and_exposes_backend_headers(client):
     exposed = response.headers["access-control-expose-headers"]
     assert "X-Request-ID" in exposed
     assert "X-Attachment-SHA256" in exposed
+
+
+
+def test_api_responses_set_private_cache_and_content_type_headers(client):
+    response = client.get("/health/live")
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
