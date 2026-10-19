@@ -10,6 +10,7 @@ from app.api.deps import get_current_user
 from app.core.config import get_settings
 from app.core.auth_cookies import REFRESH_COOKIE, clear_auth_cookies, set_auth_cookies
 from app.core.errors import DomainError
+from app.core.rate_limit import enforce_rate_limit
 from app.core.security import create_token, decode_token, hash_password, verify_password
 from app.db.session import get_db
 from app.models import AuthSession, Company, User
@@ -49,6 +50,8 @@ def browser_or_api_session(
 @router.post("/register", response_model=TokenPair | AuthenticatedSession, status_code=201)
 def register(payload: RegisterRequest, request: Request, response: Response, db: Session = Depends(get_db)) -> TokenPair | AuthenticatedSession:
     email = str(payload.email).lower()
+    enforce_rate_limit(request, scope="register-ip", limit=10, window_seconds=3600)
+    enforce_rate_limit(request, scope="register-email", limit=3, window_seconds=3600, subject=email, by_ip=False)
     if db.scalar(select(User.id).where(User.email == email)) is not None:
         raise DomainError(409, "email_already_registered", "An account with this email already exists")
     company = Company(name=payload.company_name.strip())
@@ -67,7 +70,10 @@ def register(payload: RegisterRequest, request: Request, response: Response, db:
 
 @router.post("/login", response_model=TokenPair | AuthenticatedSession)
 def login(payload: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)) -> TokenPair | AuthenticatedSession:
-    user = db.scalar(select(User).where(User.email == str(payload.email).lower()))
+    email = str(payload.email).lower()
+    enforce_rate_limit(request, scope="login-ip", limit=30, window_seconds=60)
+    enforce_rate_limit(request, scope="login-email", limit=10, window_seconds=900, subject=email, by_ip=False)
+    user = db.scalar(select(User).where(User.email == email))
     if user is None or not verify_password(payload.password, user.password_hash):
         raise DomainError(401, "invalid_credentials", "Email or password is incorrect")
     if not user.is_active:
