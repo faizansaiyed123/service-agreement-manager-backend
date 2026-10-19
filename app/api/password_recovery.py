@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.auth_cookies import clear_auth_cookies
 from app.core.errors import DomainError
 from app.core.security import hash_password, verify_password
 from app.db.session import get_db
@@ -124,6 +125,7 @@ def request_password_recovery(
 @router.post("/reset-password", status_code=204)
 def complete_password_recovery(
     payload: PasswordRecoveryConfirm,
+    response: Response,
     db: Session = Depends(get_db),
 ) -> Response:
     digest = hashlib.sha256(payload.token.encode("utf-8")).hexdigest()
@@ -196,4 +198,6 @@ def complete_password_recovery(
     for session in sessions:
         session.revoked_at = now
     db.commit()
-    return Response(status_code=204)
+    clear_auth_cookies(response)
+    response.status_code = 204
+    return response
