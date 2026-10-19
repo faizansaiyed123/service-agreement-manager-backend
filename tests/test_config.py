@@ -67,6 +67,7 @@ def test_production_settings_require_secure_external_endpoints():
         valid_production_settings(cors_origins=["https://app.example.com/dashboard"]).validate_production()
 
     valid_production_settings(cors_origins=["https://app.example.com"]).validate_production()
+    valid_production_settings(cookie_samesite="lax").validate_production()
     with pytest.raises(ValueError, match="CORS_ORIGINS must include"):
         valid_production_settings(cors_origins=[]).validate_production()
 
