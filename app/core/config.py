@@ -1,6 +1,6 @@
 import json
 from functools import lru_cache
-from typing import Annotated
+from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
 from pydantic import Field
@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     access_token_minutes: int = 15
     refresh_token_days: int = 14
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:3000", "http://localhost:5173"]
+    cookie_samesite: Literal["lax", "strict", "none"] = "lax"
     log_level: str = "INFO"
     smtp_host: str | None = None
     smtp_port: int = Field(default=587, ge=1, le=65535)
@@ -83,6 +84,8 @@ class Settings(BaseSettings):
                 raise ValueError("Production requires a unique JWT_SECRET_KEY of at least 48 characters")
             if self._is_secret_placeholder(self.webhook_encryption_key) or len(self.webhook_encryption_key) < 32:
                 raise ValueError("Production requires a unique WEBHOOK_ENCRYPTION_KEY of at least 32 characters")
+            if not self.cors_origins:
+                raise ValueError("Production CORS_ORIGINS must include the public HTTPS app origin for cookie-session CSRF protection")
             if "*" in self.cors_origins:
                 raise ValueError("Production CORS_ORIGINS cannot contain wildcard origins when credentials are enabled")
             for origin in self.cors_origins:
