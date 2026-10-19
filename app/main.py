@@ -1,6 +1,6 @@
 import logging
 from contextlib import asynccontextmanager
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -40,16 +40,28 @@ install_error_handlers(app)
 
 @app.middleware("http")
 async def request_context(request: Request, call_next):
-    request_id = request.headers.get("X-Request-ID", str(uuid4()))
+    candidate_request_id = request.headers.get("X-Request-ID", "")
+    try:
+        request_id = str(UUID(candidate_request_id))
+    except (ValueError, TypeError, AttributeError):
+        request_id = str(uuid4())
     request.state.request_id = request_id
+
+    def rejected(code: str, message: str) -> JSONResponse:
+        response = JSONResponse(
+            status_code=403,
+            content={"error": {"code": code, "message": message}},
+        )
+        response.headers["X-Request-ID"] = request_id
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        return response
 
     allowed_origins = {origin.rstrip("/") for origin in settings.cors_origins}
     origin = request.headers.get("origin")
     if origin and origin.rstrip("/") not in allowed_origins:
-        return JSONResponse(
-            status_code=403,
-            content={"error": {"code": "origin_not_allowed", "message": "Request origin is not allowed"}},
-        )
+        return rejected("origin_not_allowed", "Request origin is not allowed")
 
     public_auth_paths = {
         f"{settings.api_v1_prefix.rstrip('/')}/auth/login",
@@ -60,10 +72,7 @@ async def request_context(request: Request, call_next):
     if request.method not in {"GET", "HEAD", "OPTIONS"} and request.url.path not in public_auth_paths:
         has_session_cookie = bool(request.cookies.get(ACCESS_COOKIE) or request.cookies.get(REFRESH_COOKIE))
         if has_session_cookie and (not origin or origin.rstrip("/") not in allowed_origins):
-            return JSONResponse(
-                status_code=403,
-                content={"error": {"code": "csrf_origin_required", "message": "A trusted Origin header is required"}},
-            )
+            return rejected("csrf_origin_required", "A trusted Origin header is required")
 
     response = await call_next(request)
     response.headers["X-Request-ID"] = request_id
