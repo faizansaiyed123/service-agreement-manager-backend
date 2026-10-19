@@ -88,6 +88,10 @@ docker compose --env-file .env.production -f docker-compose.production.yml ps
 
 Also run the backend CI suite, frontend production build, and browser-based smoke tests against deployed URLs. Verify registration/login, token refresh/logout, password-reset email delivery, tenant isolation with two companies, attachments, invoice issue/payment/refund/credit calculations, CSV exports, webhook delivery, and worker restart behavior. Verify CORS rejects unconfigured origins, HTTP redirects to HTTPS at the edge, backups can be restored, and logs contain no secrets or access tokens. Health checks alone are not end-to-end validation.
 
-## 7. Operational essentials
+## 7. Abuse protection at the edge
+
+The application currently has a cooldown on password-reset requests, but the inspected login and registration handlers do not implement a distributed request-rate limiter. Before public launch, enable provider-level WAF/rate-limiting rules for `/api/v1/auth/login`, `/api/v1/auth/register`, and `/api/v1/auth/forgot-password`; monitor repeated 401s and registration spikes. Start with conservative per-IP limits and review false positives before enforcing strict limits. If the service later runs multiple API replicas, use shared/distributed rate-limit storage rather than an in-process counter. Do not rely on CORS as an abuse control.
+
+## 8. Operational essentials
 
 Monitor API and worker errors, database capacity and disk, queue retry/dead-letter growth, email delivery, and storage failures. Set backup retention and recovery-point/recovery-time targets, and keep a tested restore runbook. Rotate secrets with a planned rollout; rotate the webhook encryption key only with a migration/rotation plan for already encrypted webhook credentials. Keep a rollback image available, but understand that database migrations may not be reversible.
