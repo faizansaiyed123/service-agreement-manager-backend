@@ -15,6 +15,7 @@ from sqlalchemy.pool import StaticPool
 from app import models  # noqa: F401
 from app.db.base import Base
 from app.db.session import get_db
+from app.core.rate_limit import clear_rate_limit_state
 from app.main import app
 
 test_engine = create_engine(
@@ -27,6 +28,7 @@ TestingSession = sessionmaker(bind=test_engine, autoflush=False, expire_on_commi
 
 @pytest.fixture()
 def client() -> Generator[TestClient, None, None]:
+    clear_rate_limit_state()
     Base.metadata.create_all(test_engine)
 
     def override_get_db() -> Generator[Session, None, None]:
@@ -41,3 +43,4 @@ def client() -> Generator[TestClient, None, None]:
         yield test_client
     app.dependency_overrides.clear()
     Base.metadata.drop_all(test_engine)
+    clear_rate_limit_state()

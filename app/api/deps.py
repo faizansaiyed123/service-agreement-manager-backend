@@ -2,10 +2,11 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 import jwt
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.core.auth_cookies import ACCESS_COOKIE
 from app.core.errors import DomainError
 from app.core.security import decode_token
 from app.db.session import get_db
@@ -15,13 +16,22 @@ bearer = HTTPBearer(auto_error=False)
 
 
 def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
     db: Session = Depends(get_db),
 ) -> User:
-    if credentials is None:
-        raise DomainError(401, "authentication_required", "A bearer access token is required")
+    cookie_token = request.cookies.get(ACCESS_COOKIE)
+    browser_request = bool(request.headers.get("origin") or request.headers.get("sec-fetch-site"))
+    if browser_request:
+        # Do not accept bearer tokens from browsers: older localStorage sessions must not
+        # remain a way to authenticate after the HttpOnly-cookie migration.
+        token = cookie_token
+    else:
+        token = credentials.credentials if credentials is not None else cookie_token
+    if not token:
+        raise DomainError(401, "authentication_required", "A valid session cookie or API bearer token is required")
     try:
-        claims = decode_token(credentials.credentials)
+        claims = decode_token(token)
         if claims.get("typ") != "access":
             raise ValueError("wrong token type")
         user_id = UUID(str(claims["sub"]))

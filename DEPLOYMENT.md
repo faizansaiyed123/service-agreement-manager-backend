@@ -12,7 +12,7 @@ Copy .env.production.example to .env.production and replace every placeholder be
 
 Generate independent cryptographically random values for JWT_SECRET_KEY (at least 48 characters) and WEBHOOK_ENCRYPTION_KEY (at least 32 characters). Use a URL-safe alphanumeric POSTGRES_PASSWORD because Compose inserts it into the database URL. Do not commit .env.production. Keep backups of secrets in an approved secrets manager; do not paste them into tickets or chat.
 
-Set CORS_ORIGINS to the exact HTTPS frontend origin, without a trailing slash. Set PASSWORD_RESET_URL to the real frontend password-reset page. Configure working SMTP values: production startup intentionally fails if SMTP_HOST or SMTP_FROM_EMAIL is missing, or if STARTTLS is disabled. Set CORS_ORIGINS to an empty list only for a same-origin proxy deployment with no cross-origin frontend API requests.
+Set CORS_ORIGINS to the exact public HTTPS app origin, without a trailing slash. It is also the server-side trusted Origin allowlist for cookie-session CSRF protection, so it must not be empty in production, even for the recommended same-origin proxy setup. Set COOKIE_SAMESITE=lax for same-origin or same-site deployments. Set PASSWORD_RESET_URL to the real frontend password-reset page. Configure working SMTP values: production startup intentionally fails if SMTP_HOST or SMTP_FROM_EMAIL is missing, or if STARTTLS is disabled.
 
 For file uploads, local storage is persisted in the named attachments_data volume and is suitable only when one app instance shares that volume. Use the configured S3-compatible backend with HTTPS for horizontally scaled instances, and configure bucket access with a least-privilege identity. Arrange automated, encrypted backups and test restoration for the database and attachments before accepting real data.
 
@@ -39,7 +39,7 @@ docker compose --env-file .env.production -f docker-compose.production.yml --pro
 
 ## 4. Configure HTTPS reverse proxy
 
-Terminate TLS at the host reverse proxy or hosting platform. Proxy requests to http://127.0.0.1:8000, preserve request method/body and the Authorization, Content-Type, Idempotency-Key, and X-Request-ID headers, and forward the original host/protocol as needed by your proxy. Configure the frontend domain separately and route frontend paths to the static app with an SPA fallback to index.html. Do not expose port 8000 or the database publicly.
+Terminate TLS at the host reverse proxy or hosting platform. Proxy requests to http://127.0.0.1:8000, preserve request method/body and the Cookie, Set-Cookie, Origin, Authorization, Content-Type, Idempotency-Key, and X-Request-ID headers, and forward the original host/protocol as needed by your proxy. Configure the frontend domain separately and route frontend paths to the static app with an SPA fallback to index.html. Do not expose port 8000 or the database publicly.
 
 ## 5. Put the frontend and API behind HTTPS on one origin
 
@@ -75,9 +75,9 @@ app.example.com {
 }
 ```
 
-For this same-origin setup, set `PASSWORD_RESET_URL=https://app.example.com/reset-password`. Configure `CORS_ORIGINS` as `https://app.example.com` (or an empty value if you intentionally want no cross-origin browser access). The app will call relative `/api/v1` paths. The proxy deliberately does not expose the interactive API docs at `/docs` publicly.
+For this same-origin setup, set `PASSWORD_RESET_URL=https://app.example.com/reset-password`. Configure `CORS_ORIGINS=https://app.example.com` even though the browser calls the API on the same origin: the backend uses this exact allowlist to reject untrusted request origins. Keep `COOKIE_SAMESITE=lax`. The app will call relative `/api/v1` paths. The proxy deliberately does not expose the interactive API docs at `/docs` publicly.
 
-Alternatively, deploy the frontend and API on separate HTTPS domains. Build the frontend with `--build-arg VITE_API_URL=https://api.example.com`, set backend `CORS_ORIGINS=https://app.example.com`, and set the password reset URL to the frontend domain. Never expose tokens or credentials through frontend build variables.
+A separate API hostname is possible when both names are same-site (for example, `app.example.com` and `api.example.com`): set `VITE_API_URL=https://api.example.com`, `CORS_ORIGINS=https://app.example.com`, and `PASSWORD_RESET_URL` to the frontend page. Update the frontend CSP `connect-src` directive to include that exact API origin. For unrelated frontend/API sites, cookies require `COOKIE_SAMESITE=none` and Secure; browser third-party-cookie restrictions can still block them, so same-origin deployment is strongly preferred. Never expose tokens or credentials through frontend build variables.
 
 ## 6. Verify before opening access
 
@@ -91,7 +91,7 @@ Also run the backend CI suite, frontend production build, and browser-based smok
 
 ## 7. Abuse protection at the edge
 
-The application currently has a cooldown on password-reset requests, but the inspected login and registration handlers do not implement a distributed request-rate limiter. Before public launch, enable provider-level WAF/rate-limiting rules for `/api/v1/auth/login`, `/api/v1/auth/register`, and `/api/v1/auth/forgot-password`; monitor repeated 401s and registration spikes. Start with conservative per-IP limits and review false positives before enforcing strict limits. If the service later runs multiple API replicas, use shared/distributed rate-limit storage rather than an in-process counter. Do not rely on CORS as an abuse control.
+The application now applies sliding-window limits to login (per IP and account identifier), registration, password-reset requests, and reset confirmations. These counters are process-local, reset on restart, and are not shared across replicas; they are defense in depth, not a complete distributed abuse control. Before public launch, enable provider-level WAF/rate-limiting rules for `/api/v1/auth/login`, `/api/v1/auth/register`, `/api/v1/auth/forgot-password`, and `/api/v1/auth/reset-password`, and monitor repeated 401/429 responses and registration spikes. If the service later runs multiple API replicas, use a shared rate-limit store. Do not rely on CORS as an abuse control.
 
 ## 8. Operational essentials
 

@@ -2,17 +2,19 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import jwt
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.config import get_settings
+from app.core.auth_cookies import REFRESH_COOKIE, clear_auth_cookies, set_auth_cookies
 from app.core.errors import DomainError
+from app.core.rate_limit import enforce_rate_limit
 from app.core.security import create_token, decode_token, hash_password, verify_password
 from app.db.session import get_db
 from app.models import AuthSession, Company, User
-from app.schemas import LoginRequest, RefreshRequest, RegisterRequest, TokenPair, UserRead
+from app.schemas import AuthenticatedSession, LoginRequest, RefreshRequest, RegisterRequest, TokenPair, UserRead
 from app.user_schemas import PasswordChange
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -32,9 +34,24 @@ def token_pair(user: User, session_id: UUID) -> tuple[TokenPair, str, datetime]:
     return TokenPair(access_token=access, refresh_token=refresh, expires_in=settings.access_token_minutes * 60), jti, expires_at
 
 
-@router.post("/register", response_model=TokenPair, status_code=201)
-def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> TokenPair:
+def browser_or_api_session(
+    request: Request,
+    response: Response,
+    pair: TokenPair,
+) -> TokenPair | AuthenticatedSession:
+    # Browser requests always carry Origin. Never return bearer tokens to JavaScript.
+    # Non-browser API clients without Origin retain the explicit bearer-token flow.
+    if request.headers.get("origin"):
+        set_auth_cookies(response, pair.access_token, pair.refresh_token)
+        return AuthenticatedSession(expires_in=pair.expires_in)
+    return pair
+
+
+@router.post("/register", response_model=TokenPair | AuthenticatedSession, status_code=201)
+def register(payload: RegisterRequest, request: Request, response: Response, db: Session = Depends(get_db)) -> TokenPair | AuthenticatedSession:
     email = str(payload.email).lower()
+    enforce_rate_limit(request, scope="register-ip", limit=10, window_seconds=3600)
+    enforce_rate_limit(request, scope="register-email", limit=3, window_seconds=3600, subject=email, by_ip=False)
     if db.scalar(select(User.id).where(User.email == email)) is not None:
         raise DomainError(409, "email_already_registered", "An account with this email already exists")
     company = Company(name=payload.company_name.strip())
@@ -48,12 +65,15 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> TokenPa
     pair, jti, expires_at = token_pair(user, session_id)
     db.add(AuthSession(id=session_id, user_id=user.id, refresh_jti=jti, expires_at=expires_at))
     db.commit()
-    return pair
+    return browser_or_api_session(request, response, pair)
 
 
-@router.post("/login", response_model=TokenPair)
-def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenPair:
-    user = db.scalar(select(User).where(User.email == str(payload.email).lower()))
+@router.post("/login", response_model=TokenPair | AuthenticatedSession)
+def login(payload: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)) -> TokenPair | AuthenticatedSession:
+    email = str(payload.email).lower()
+    enforce_rate_limit(request, scope="login-ip", limit=30, window_seconds=60)
+    enforce_rate_limit(request, scope="login-email", limit=10, window_seconds=900, subject=email, by_ip=False)
+    user = db.scalar(select(User).where(User.email == email))
     if user is None or not verify_password(payload.password, user.password_hash):
         raise DomainError(401, "invalid_credentials", "Email or password is incorrect")
     if not user.is_active:
@@ -65,13 +85,25 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenPair:
     pair, jti, expires_at = token_pair(user, session_id)
     db.add(AuthSession(id=session_id, user_id=user.id, refresh_jti=jti, expires_at=expires_at))
     db.commit()
-    return pair
+    return browser_or_api_session(request, response, pair)
 
 
-@router.post("/refresh", response_model=TokenPair)
-def refresh(payload: RefreshRequest, db: Session = Depends(get_db)) -> TokenPair:
+@router.post("/refresh", response_model=TokenPair | AuthenticatedSession)
+def refresh(
+    request: Request,
+    response: Response,
+    payload: RefreshRequest | None = None,
+    db: Session = Depends(get_db),
+) -> TokenPair | AuthenticatedSession:
+    raw_refresh_token = request.cookies.get(REFRESH_COOKIE)
+    if request.headers.get("origin") and not raw_refresh_token:
+        raise DomainError(401, "cookie_session_required", "Browser sessions must use the refresh cookie")
+    if not raw_refresh_token and payload is not None:
+        raw_refresh_token = payload.refresh_token
+    if not raw_refresh_token:
+        raise DomainError(401, "invalid_refresh_token", "The refresh token is invalid or expired")
     try:
-        claims = decode_token(payload.refresh_token)
+        claims = decode_token(raw_refresh_token)
         if claims.get("typ") != "refresh":
             raise ValueError("wrong token type")
         user_id, company_id = UUID(str(claims["sub"])), UUID(str(claims["company_id"]))
@@ -97,12 +129,13 @@ def refresh(payload: RefreshRequest, db: Session = Depends(get_db)) -> TokenPair
     pair, next_jti, next_expiry = token_pair(user, session_id)
     session.refresh_jti, session.expires_at = next_jti, next_expiry
     db.commit()
-    return pair
+    return browser_or_api_session(request, response, pair)
 
 
 @router.post("/change-password", status_code=204)
 def change_password(
     payload: PasswordChange,
+    response: Response,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Response:
@@ -119,17 +152,21 @@ def change_password(
     for session in sessions:
         session.revoked_at = now
     db.commit()
-    return Response(status_code=204)
+    clear_auth_cookies(response)
+    response.status_code = 204
+    return response
 
 
 @router.post("/logout", status_code=204)
-def logout(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> Response:
+def logout(response: Response, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> Response:
     sessions = db.scalars(select(AuthSession).where(AuthSession.user_id == user.id, AuthSession.revoked_at.is_(None))).all()
     now = datetime.now(UTC)
     for session in sessions:
         session.revoked_at = now
     db.commit()
-    return Response(status_code=204)
+    clear_auth_cookies(response)
+    response.status_code = 204
+    return response
 
 
 @router.get("/me", response_model=UserRead)

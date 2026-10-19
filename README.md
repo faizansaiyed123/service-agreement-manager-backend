@@ -56,6 +56,10 @@ GitHub Actions applies all Alembic migrations against PostgreSQL 16, runs Ruff, 
 
 Real SMTP/SMS/S3 provider delivery, production deployment, TLS/proxy setup, secret injection and operational monitoring still require target-environment credentials and infrastructure verification.
 
+## Browser session security
+
+Browser login and registration return no bearer tokens in JSON. The API sets short-lived access and refresh tokens in `HttpOnly` cookies, validates exact trusted origins on browser requests, and applies CSRF checks to cookie-authenticated state changes. Browser clients must use cookies; bearer tokens remain supported for non-browser API clients. Authentication endpoints have process-local rate limits, which should be supplemented by a provider WAF before public launch.
+
 ## Production deployment
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for production environment setup, HTTPS reverse-proxy requirements, health checks, backups, and release verification. [docker-compose.production.yml](docker-compose.production.yml) binds the API to loopback and leaves PostgreSQL unpublished. The existing docker-compose.yml is for local development and publishes PostgreSQL/API ports; do not use it directly as a public production stack.
