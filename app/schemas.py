@@ -33,6 +33,11 @@ class TokenPair(BaseModel):
     expires_in: int
 
 
+class AuthenticatedSession(BaseModel):
+    authenticated: Literal[True] = True
+    expires_in: int
+
+
 class UserRead(ORMModel):
     id: UUID
     company_id: UUID
