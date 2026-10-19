@@ -86,8 +86,10 @@ def request_password_recovery(
     db.add(reset_token)
     db.flush()
 
-    separator = "&" if "?" in settings.password_reset_url else "?"
-    reset_url = f"{settings.password_reset_url}{separator}{urlencode({'token': raw_token})}"
+    # Keep the single-use reset secret in the fragment: browsers do not send URL fragments
+    # in HTTP requests, so it is not exposed to web-server/proxy access logs or Referer headers.
+    reset_base = settings.password_reset_url.split("#", 1)[0]
+    reset_url = f"{reset_base}#{urlencode({'token': raw_token})}"
     subject = "Reset your Service Agreement Manager password"
     body = (
         "A password reset was requested for your account.\n\n"
