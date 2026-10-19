@@ -4,12 +4,13 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.auth_cookies import clear_auth_cookies
+from app.core.rate_limit import enforce_rate_limit
 from app.core.errors import DomainError
 from app.core.security import hash_password, verify_password
 from app.db.session import get_db
@@ -30,12 +31,15 @@ def utc_value(value: datetime) -> datetime:
 @router.post("/forgot-password", status_code=202)
 def request_password_recovery(
     payload: PasswordRecoveryRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
     """Enqueue a reset email without revealing whether an account exists."""
     settings = get_settings()
     now = datetime.now(UTC)
     email = str(payload.email).lower()
+    enforce_rate_limit(request, scope="password-reset-ip", limit=15, window_seconds=3600)
+    enforce_rate_limit(request, scope="password-reset-email", limit=5, window_seconds=3600, subject=email, by_ip=False)
     user = db.scalar(
         select(User)
         .where(User.email == email)
@@ -125,9 +129,11 @@ def request_password_recovery(
 @router.post("/reset-password", status_code=204)
 def complete_password_recovery(
     payload: PasswordRecoveryConfirm,
+    request: Request,
     response: Response,
     db: Session = Depends(get_db),
 ) -> Response:
+    enforce_rate_limit(request, scope="password-reset-confirm-ip", limit=30, window_seconds=3600)
     digest = hashlib.sha256(payload.token.encode("utf-8")).hexdigest()
     token_hint = db.scalar(
         select(PasswordResetToken)
