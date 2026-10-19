@@ -165,3 +165,50 @@ def test_recurring_invoice_inherits_agreement_service_location(client):
     })
     assert schedule.status_code == 201, schedule.text
     assert schedule.json()["service_location_id"] == location["id"]
+
+
+
+def test_credit_cannot_be_applied_to_a_draft_invoice(client):
+    owner = client.post("/api/v1/auth/register", json={
+        "company_name": "Draft Credit HVAC",
+        "full_name": "Draft Credit Owner",
+        "email": "draft-credit@example.com",
+        "password": "correct-horse-battery-42",
+    }).json()
+    headers = {"Authorization": f"Bearer {owner['access_token']}"}
+    customer = client.post(
+        "/api/v1/customers", headers=headers, json={"name": "Draft Credit Customer"}
+    ).json()
+    location = client.post(
+        f"/api/v1/customers/{customer['id']}/service-locations",
+        headers=headers,
+        json={"name": "Draft Credit Site", "address_line1": "9 Draft Way", "city": "Austin"},
+    ).json()
+    invoice = client.post("/api/v1/invoices", headers=headers, json={
+        "customer_id": customer["id"],
+        "service_location_id": location["id"],
+        "invoice_date": date.today().isoformat(),
+        "due_date": (date.today() + timedelta(days=14)).isoformat(),
+        "lines": [{
+            "service_code": "LABOR",
+            "description": "Draft work",
+            "quantity": "1",
+            "unit_price": "100.00",
+        }],
+    })
+    assert invoice.status_code == 201, invoice.text
+    invoice_id = invoice.json()["id"]
+
+    credit = client.post(
+        f"/api/v1/invoices/{invoice_id}/credits",
+        headers={**headers, "Idempotency-Key": "draft-credit-001"},
+        json={"amount": "100.00", "reason": "Must wait until issue"},
+    )
+
+    assert credit.status_code == 409, credit.text
+    current = client.get(f"/api/v1/invoices/{invoice_id}", headers=headers)
+    assert current.status_code == 200, current.text
+    assert current.json()["status"] == "draft"
+    credits = client.get(f"/api/v1/invoices/{invoice_id}/credits", headers=headers)
+    assert credits.status_code == 200, credits.text
+    assert credits.json() == []
