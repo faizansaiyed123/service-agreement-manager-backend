@@ -16,7 +16,9 @@ services:
     # Intentionally not published to the host.
 
   api:
-    build: .
+    build:
+      context: .
+      target: runtime
     restart: unless-stopped
     env_file: .env.production
     environment:
@@ -37,7 +39,9 @@ services:
       retries: 5
 
   billing-worker:
-    build: .
+    build:
+      context: .
+      target: runtime
     restart: unless-stopped
     env_file: .env.production
     environment:
@@ -51,7 +55,9 @@ services:
     command: ["python", "-m", "app.workers.billing"]
 
   webhook-worker:
-    build: .
+    build:
+      context: .
+      target: runtime
     restart: unless-stopped
     env_file: .env.production
     environment:
@@ -65,7 +71,9 @@ services:
     command: ["python", "-m", "app.workers.webhooks"]
 
   maintenance-worker:
-    build: .
+    build:
+      context: .
+      target: runtime
     restart: unless-stopped
     env_file: .env.production
     environment:
@@ -79,7 +87,9 @@ services:
     command: ["python", "-m", "app.workers.maintenance"]
 
   notification-worker:
-    build: .
+    build:
+      context: .
+      target: runtime
     restart: unless-stopped
     env_file: .env.production
     environment:
@@ -93,7 +103,9 @@ services:
     command: ["python", "-m", "app.workers.notifications"]
 
   sms-worker:
-    build: .
+    build:
+      context: .
+      target: runtime
     restart: unless-stopped
     env_file: .env.production
     environment:
