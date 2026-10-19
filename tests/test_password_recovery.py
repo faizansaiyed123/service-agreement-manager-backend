@@ -31,7 +31,7 @@ def recover_token_from_outbox(email):
         ).order_by(NotificationOutbox.created_at.desc()))
         assert record is not None
         url_line = next(line for line in record.body.splitlines() if line.startswith("http"))
-        values = parse_qs(urlsplit(url_line).query)
+        values = parse_qs(urlsplit(url_line).fragment)
         return values["token"][0], record.id
     finally:
         db.close()
