@@ -3,11 +3,13 @@ from contextlib import asynccontextmanager
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.api import agreements, assets, attachments, auth, billing, branches, companies, customer_imports, customers, exports, notifications, operations, password_recovery, reports, renewals, recurring_invoices, sms, users, webhooks
 from app.core.config import get_settings
+from app.core.auth_cookies import ACCESS_COOKIE, REFRESH_COOKIE
 from app.core.errors import install_error_handlers
 from app.db.session import engine
 
@@ -40,6 +42,29 @@ install_error_handlers(app)
 async def request_context(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID", str(uuid4()))
     request.state.request_id = request_id
+
+    allowed_origins = {origin.rstrip("/") for origin in settings.cors_origins}
+    origin = request.headers.get("origin")
+    if origin and origin.rstrip("/") not in allowed_origins:
+        return JSONResponse(
+            status_code=403,
+            content={"error": {"code": "origin_not_allowed", "message": "Request origin is not allowed"}},
+        )
+
+    public_auth_paths = {
+        f"{settings.api_v1_prefix.rstrip('/')}/auth/login",
+        f"{settings.api_v1_prefix.rstrip('/')}/auth/register",
+        f"{settings.api_v1_prefix.rstrip('/')}/auth/forgot-password",
+        f"{settings.api_v1_prefix.rstrip('/')}/auth/reset-password",
+    }
+    if request.method not in {"GET", "HEAD", "OPTIONS"} and request.url.path not in public_auth_paths:
+        has_session_cookie = bool(request.cookies.get(ACCESS_COOKIE) or request.cookies.get(REFRESH_COOKIE))
+        if has_session_cookie and (not origin or origin.rstrip("/") not in allowed_origins):
+            return JSONResponse(
+                status_code=403,
+                content={"error": {"code": "csrf_origin_required", "message": "A trusted Origin header is required"}},
+            )
+
     response = await call_next(request)
     response.headers["X-Request-ID"] = request_id
     response.headers["Cache-Control"] = "no-store"
