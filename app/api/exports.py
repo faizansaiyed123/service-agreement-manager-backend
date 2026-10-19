@@ -9,9 +9,10 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.api.billing import invoice_adjustments
 from app.core.errors import DomainError
 from app.db.session import get_db
-from app.models import Agreement, Customer, Invoice, Payment, User, WorkOrder
+from app.models import Agreement, Customer, Invoice, User, WorkOrder
 
 router = APIRouter(prefix="/exports", tags=["CSV exports"])
 MAX_EXPORT_ROWS = 10000
@@ -90,23 +91,32 @@ def export_invoices(
 ) -> Response:
     validate_date_range(invoice_date_from, invoice_date_to, "invoice_date_from", "invoice_date_to")
     paging(limit, offset)
-    paid = select(Payment.invoice_id, func.sum(Payment.amount).label("amount_paid")).where(
-        Payment.company_id == user.company_id
-    ).group_by(Payment.invoice_id).subquery()
-    stmt = select(Invoice, func.coalesce(paid.c.amount_paid, Decimal("0.00"))).outerjoin(
-        paid, paid.c.invoice_id == Invoice.id
-    ).where(Invoice.company_id == user.company_id)
+    stmt = select(Invoice).where(Invoice.company_id == user.company_id)
     if status:
         stmt = stmt.where(Invoice.status == status)
     if invoice_date_from:
         stmt = stmt.where(Invoice.invoice_date >= invoice_date_from)
     if invoice_date_to:
         stmt = stmt.where(Invoice.invoice_date <= invoice_date_to)
-    records = db.execute(stmt.order_by(Invoice.invoice_date, Invoice.id).limit(limit).offset(offset)).all()
+    records = list(
+        db.scalars(stmt.order_by(Invoice.invoice_date, Invoice.id).limit(limit).offset(offset)).all()
+    )
+    if records:
+        paid_by_invoice, refunded_by_invoice, credits_by_invoice = invoice_adjustments(
+            db, [invoice.id for invoice in records]
+        )
+    else:
+        paid_by_invoice, refunded_by_invoice, credits_by_invoice = {}, {}, {}
     rows = []
-    for invoice, paid_amount in records:
-        amount_paid = min(Decimal(paid_amount or 0), invoice.total_amount)
-        balance = max(invoice.total_amount - amount_paid, Decimal("0.00"))
+    for invoice in records:
+        net_paid = max(
+            paid_by_invoice.get(invoice.id, Decimal("0.00"))
+            - refunded_by_invoice.get(invoice.id, Decimal("0.00")),
+            Decimal("0.00"),
+        )
+        amount_paid = min(net_paid, invoice.total_amount)
+        credits = credits_by_invoice.get(invoice.id, Decimal("0.00"))
+        balance = max(invoice.total_amount - net_paid - credits, Decimal("0.00"))
         rows.append((
             str(invoice.id), invoice.invoice_number, str(invoice.customer_id), invoice.status,
             invoice.invoice_date.isoformat(), invoice.due_date.isoformat(), invoice.currency,
