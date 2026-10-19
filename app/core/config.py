@@ -85,6 +85,24 @@ class Settings(BaseSettings):
                 raise ValueError("Production requires a unique WEBHOOK_ENCRYPTION_KEY of at least 32 characters")
             if "*" in self.cors_origins:
                 raise ValueError("Production CORS_ORIGINS cannot contain wildcard origins when credentials are enabled")
+            for origin in self.cors_origins:
+                parsed_origin = urlsplit(origin)
+                hostname = (parsed_origin.hostname or "").lower()
+                if (
+                    parsed_origin.scheme != "https"
+                    or not hostname
+                    or hostname in {"localhost", "127.0.0.1", "::1"}
+                    or hostname.endswith(".localhost")
+                    or parsed_origin.path
+                    or parsed_origin.query
+                    or parsed_origin.fragment
+                    or parsed_origin.username
+                    or parsed_origin.password
+                ):
+                    raise ValueError(
+                        "Production CORS_ORIGINS must contain only public HTTPS origins "
+                        "without paths, credentials, queries, or fragments"
+                    )
             if self.storage_backend.lower() in {"s3", "s3-compatible"}:
                 if not self.storage_bucket:
                     raise ValueError("S3 storage requires STORAGE_BUCKET in production")
