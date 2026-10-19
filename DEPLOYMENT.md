@@ -41,7 +41,44 @@ docker compose --env-file .env.production -f docker-compose.production.yml --pro
 
 Terminate TLS at the host reverse proxy or hosting platform. Proxy requests to http://127.0.0.1:8000, preserve request method/body and the Authorization, Content-Type, Idempotency-Key, and X-Request-ID headers, and forward the original host/protocol as needed by your proxy. Configure the frontend domain separately and route frontend paths to the static app with an SPA fallback to index.html. Do not expose port 8000 or the database publicly.
 
-## 5. Verify before opening access
+## 5. Put the frontend and API behind HTTPS on one origin
+
+For a simple single-host setup, build the frontend container from the frontend repository with the default empty `VITE_API_URL`, then bind its Nginx port to loopback:
+
+```sh
+# Run from the frontend repository, on the same host as this backend.
+docker build -t service-agreement-manager-frontend .
+docker run -d --name sam-frontend --restart unless-stopped \
+  -p 127.0.0.1:8080:80 service-agreement-manager-frontend
+```
+
+Install Caddy on the host and configure a site for your real domain (replace `app.example.com`). Caddy obtains/renews TLS certificates if DNS points to the host and ports 80/443 are reachable:
+
+```caddyfile
+app.example.com {
+    encode zstd gzip
+
+    @api path /api/v1/*
+    handle @api {
+        reverse_proxy 127.0.0.1:8000
+    }
+
+    @health path /health/*
+    handle @health {
+        reverse_proxy 127.0.0.1:8000
+    }
+
+    handle {
+        reverse_proxy 127.0.0.1:8080
+    }
+}
+```
+
+For this same-origin setup, set `PASSWORD_RESET_URL=https://app.example.com/reset-password`. Configure `CORS_ORIGINS` as `https://app.example.com` (or an empty value if you intentionally want no cross-origin browser access). The app will call relative `/api/v1` paths. The proxy deliberately does not expose the interactive API docs at `/docs` publicly.
+
+Alternatively, deploy the frontend and API on separate HTTPS domains. Build the frontend with `--build-arg VITE_API_URL=https://api.example.com`, set backend `CORS_ORIGINS=https://app.example.com`, and set the password reset URL to the frontend domain. Never expose tokens or credentials through frontend build variables.
+
+## 6. Verify before opening access
 
 ```sh
 curl --fail http://127.0.0.1:8000/health/live
@@ -51,6 +88,6 @@ docker compose --env-file .env.production -f docker-compose.production.yml ps
 
 Also run the backend CI suite, frontend production build, and browser-based smoke tests against deployed URLs. Verify registration/login, token refresh/logout, password-reset email delivery, tenant isolation with two companies, attachments, invoice issue/payment/refund/credit calculations, CSV exports, webhook delivery, and worker restart behavior. Verify CORS rejects unconfigured origins, HTTP redirects to HTTPS at the edge, backups can be restored, and logs contain no secrets or access tokens. Health checks alone are not end-to-end validation.
 
-## 6. Operational essentials
+## 7. Operational essentials
 
 Monitor API and worker errors, database capacity and disk, queue retry/dead-letter growth, email delivery, and storage failures. Set backup retention and recovery-point/recovery-time targets, and keep a tested restore runbook. Rotate secrets with a planned rollout; rotate the webhook encryption key only with a migration/rotation plan for already encrypted webhook credentials. Keep a rollback image available, but understand that database migrations may not be reversible.
