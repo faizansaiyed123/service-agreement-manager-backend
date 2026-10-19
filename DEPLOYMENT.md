@@ -57,6 +57,7 @@ Install Caddy on the host and configure a site for your real domain (replace `ap
 ```caddyfile
 app.example.com {
     encode zstd gzip
+    header Strict-Transport-Security "max-age=31536000"
 
     @api path /api/v1/*
     handle @api {
