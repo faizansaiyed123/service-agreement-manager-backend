@@ -6,9 +6,10 @@ from sqlalchemy import and_, case, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.api.billing import invoice_adjustments
 from app.core.errors import DomainError
 from app.db.session import get_db
-from app.models import Agreement, Company, Invoice, Payment, User, WorkOrder
+from app.models import Agreement, Company, Invoice, User, WorkOrder
 from app.report_schemas import AgreementSummaryRead, BillingReceivablesRead, TechnicianWorkloadRead, WorkOrderReportRead
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -77,30 +78,49 @@ def billing_receivables(
     company = db.get(Company, user.company_id)
     if company is None:
         raise DomainError(404, "company_not_found", "Company not found")
-    paid_subquery = (
-        select(Payment.invoice_id, func.sum(Payment.amount).label("paid"))
-        .group_by(Payment.invoice_id)
-        .subquery()
-    )
-    stmt = select(Invoice, func.coalesce(paid_subquery.c.paid, 0)).outerjoin(
-        paid_subquery, paid_subquery.c.invoice_id == Invoice.id
-    ).where(
+    stmt = select(Invoice).where(
         Invoice.company_id == user.company_id, Invoice.status != "void",
     )
     if invoice_date_from:
         stmt = stmt.where(Invoice.invoice_date >= invoice_date_from)
     if invoice_date_to:
         stmt = stmt.where(Invoice.invoice_date <= invoice_date_to)
-    rows = list(db.execute(stmt).all())
-    issued = [(invoice, Decimal(paid or 0)) for invoice, paid in rows if invoice.status in {"issued", "partially_paid", "paid"}]
-    drafts = [invoice for invoice, _ in rows if invoice.status == "draft"]
+    invoices = list(db.scalars(stmt).all())
+    if invoices:
+        paid_by_invoice, refunded_by_invoice, credits_by_invoice = invoice_adjustments(
+            db, [invoice.id for invoice in invoices]
+        )
+    else:
+        paid_by_invoice, refunded_by_invoice, credits_by_invoice = {}, {}, {}
+    issued = []
+    for invoice in invoices:
+        if invoice.status in {"issued", "partially_paid", "paid"}:
+            paid = max(
+                paid_by_invoice.get(invoice.id, Decimal("0.00"))
+                - refunded_by_invoice.get(invoice.id, Decimal("0.00")),
+                Decimal("0.00"),
+            )
+            credits = credits_by_invoice.get(invoice.id, Decimal("0.00"))
+            issued.append((invoice, paid, credits))
+    drafts = [invoice for invoice in invoices if invoice.status == "draft"]
     today = utc_today()
-    total_invoiced = sum((invoice.total_amount for invoice, _ in issued), Decimal("0.00"))
-    total_paid = sum((min(paid, invoice.total_amount) for invoice, paid in issued), Decimal("0.00"))
-    outstanding = sum((max(invoice.total_amount - paid, Decimal("0.00")) for invoice, paid in issued), Decimal("0.00"))
+    total_invoiced = sum((invoice.total_amount for invoice, _, _ in issued), Decimal("0.00"))
+    total_paid = sum(
+        (min(paid, invoice.total_amount) for invoice, paid, _ in issued), Decimal("0.00")
+    )
+    outstanding = sum(
+        (
+            max(invoice.total_amount - paid - credits, Decimal("0.00"))
+            for invoice, paid, credits in issued
+        ),
+        Decimal("0.00"),
+    )
     overdue = [
-        (invoice, max(invoice.total_amount - paid, Decimal("0.00")))
-        for invoice, paid in issued
+        (
+            invoice,
+            max(invoice.total_amount - paid - credits, Decimal("0.00")),
+        )
+        for invoice, paid, credits in issued
         if invoice.status in {"issued", "partially_paid"} and invoice.due_date < today
     ]
     return BillingReceivablesRead(
