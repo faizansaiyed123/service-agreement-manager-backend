@@ -513,8 +513,12 @@ def create_invoice_credit(
         return existing
 
     invoice = get_invoice(db, user.company_id, invoice_id, lock=True)
-    if invoice.status == "void":
-        raise DomainError(409, "invoice_void", "Void invoices cannot receive credits")
+    if invoice.status not in {"issued", "partially_paid"}:
+        raise DomainError(
+            409,
+            "invoice_not_creditable",
+            "Only issued invoices with an outstanding balance can receive credits",
+        )
     current = invoice_response(db, invoice)
     if payload.amount > current.balance_due:
         raise DomainError(409, "credit_exceeds_balance", "Credit exceeds the invoice balance")

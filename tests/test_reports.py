@@ -38,16 +38,28 @@ def test_receivables_report_calculates_partial_and_overdue_balances(client):
         **headers, "Idempotency-Key": "report-payment-0001",
     }, json={"amount": "30.00", "payment_method": "check"})
     assert payment.status_code == 201
+    refund = client.post(
+        f"/api/v1/invoices/{invoice_id}/payments/{payment.json()['id']}/refunds",
+        headers={**headers, "Idempotency-Key": "report-refund-0001"},
+        json={"amount": "5.00", "refund_method": "bank_transfer", "reason": "Partial refund"},
+    )
+    assert refund.status_code == 201, refund.text
+    credit = client.post(
+        f"/api/v1/invoices/{invoice_id}/credits",
+        headers={**headers, "Idempotency-Key": "report-credit-0001"},
+        json={"amount": "10.00", "reason": "Service credit"},
+    )
+    assert credit.status_code == 201, credit.text
 
     report = client.get("/api/v1/reports/billing/receivables", headers=headers)
     assert report.status_code == 200, report.text
     data = report.json()
     assert data["issued_invoice_count"] == 1
     assert data["total_invoiced"] == "100.00"
-    assert data["total_paid"] == "30.00"
-    assert data["outstanding"] == "70.00"
+    assert data["total_paid"] == "25.00"
+    assert data["outstanding"] == "65.00"
     assert data["overdue_invoice_count"] == 1
-    assert data["overdue_amount"] == "70.00"
+    assert data["overdue_amount"] == "65.00"
 
 
 def test_reports_are_tenant_scoped_and_dates_validated(client):

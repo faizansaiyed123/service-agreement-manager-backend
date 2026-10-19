@@ -55,3 +55,7 @@ Attachments default to local storage at STORAGE_ROOT. S3-compatible storage can 
 GitHub Actions applies all Alembic migrations against PostgreSQL 16, runs Ruff, the full pytest suite, dedicated PostgreSQL concurrency tests and Docker Compose smoke checks.
 
 Real SMTP/SMS/S3 provider delivery, production deployment, TLS/proxy setup, secret injection and operational monitoring still require target-environment credentials and infrastructure verification.
+
+## Production deployment
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for production environment setup, HTTPS reverse-proxy requirements, health checks, backups, and release verification. [docker-compose.production.yml](docker-compose.production.yml) binds the API to loopback and leaves PostgreSQL unpublished. The existing docker-compose.yml is for local development and publishes PostgreSQL/API ports; do not use it directly as a public production stack.

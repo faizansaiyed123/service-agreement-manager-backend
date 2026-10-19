@@ -62,6 +62,19 @@ def test_invoice_export_includes_ledger_paid_and_balance(client):
         **headers, "Idempotency-Key": "export-payment-0001",
     }, json={"amount": "25.00", "payment_method": "check"})
     assert payment.status_code == 201
+    refund = client.post(
+        f"/api/v1/invoices/{invoice_id}/payments/{payment.json()['id']}/refunds",
+        headers={**headers, "Idempotency-Key": "export-refund-0001"},
+        json={"amount": "5.00", "refund_method": "bank_transfer", "reason": "Partial refund"},
+    )
+    assert refund.status_code == 201, refund.text
+    credit = client.post(
+        f"/api/v1/invoices/{invoice_id}/credits",
+        headers={**headers, "Idempotency-Key": "export-credit-0001"},
+        json={"amount": "10.00", "reason": "Service credit"},
+    )
+    assert credit.status_code == 201, credit.text
+
     data = rows(client.get("/api/v1/exports/invoices.csv", headers=headers).text)
     assert data[0][-3:] == ["total_amount", "amount_paid", "balance_due"]
-    assert data[1][-3:] == ["125.00", "25.00", "100.00"]
+    assert data[1][-3:] == ["125.00", "20.00", "95.00"]

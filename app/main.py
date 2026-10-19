@@ -42,6 +42,9 @@ async def request_context(request: Request, call_next):
     request.state.request_id = request_id
     response = await call_next(request)
     response.headers["X-Request-ID"] = request_id
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     return response
 
 

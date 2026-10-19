@@ -7,6 +7,7 @@ def valid_production_settings(**overrides) -> Settings:
     values = {
         "app_env": "production",
         "debug": False,
+        "cors_origins": ["https://app.example.com"],
         "jwt_secret_key": "production-secret-value-that-is-longer-than-forty-eight-characters",
         "smtp_host": "smtp.example.com",
         "smtp_from_email": "no-reply@example.com",
@@ -55,6 +56,18 @@ def test_cors_origins_accept_comma_separated_and_json_environment_values():
 def test_production_settings_require_secure_external_endpoints():
     with pytest.raises(ValueError, match="CORS_ORIGINS"):
         valid_production_settings(cors_origins=["*"]).validate_production()
+
+    with pytest.raises(ValueError, match="public HTTPS origins"):
+        valid_production_settings(cors_origins=["http://app.example.com"]).validate_production()
+
+    with pytest.raises(ValueError, match="public HTTPS origins"):
+        valid_production_settings(cors_origins=["https://localhost:5173"]).validate_production()
+
+    with pytest.raises(ValueError, match="public HTTPS origins"):
+        valid_production_settings(cors_origins=["https://app.example.com/dashboard"]).validate_production()
+
+    valid_production_settings(cors_origins=["https://app.example.com"]).validate_production()
+    valid_production_settings(cors_origins=[]).validate_production()
 
     with pytest.raises(ValueError, match="S3-compatible storage endpoints"):
         valid_production_settings(
