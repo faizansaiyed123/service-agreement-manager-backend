@@ -3,7 +3,7 @@ from functools import lru_cache
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     debug: bool = False
     api_v1_prefix: str = "/api/v1"
     database_url: str = "postgresql+psycopg://sam:sam_dev_only@localhost:5432/service_agreements"
+    postgres_password: SecretStr | None = None
     jwt_secret_key: str = "unsafe-development-secret-change-this-please"
     access_token_minutes: int = 15
     refresh_token_days: int = 14
@@ -87,7 +88,19 @@ class Settings(BaseSettings):
             if self._is_secret_placeholder(self.jwt_secret_key) or len(self.jwt_secret_key) < 48:
                 raise ValueError("Production requires a unique JWT_SECRET_KEY of at least 48 characters")
             if self._is_secret_placeholder(self.webhook_encryption_key) or len(self.webhook_encryption_key) < 32:
-                raise ValueError("Production requires a unique WEBHOOK_ENCRYPTION_KEY of at least 32 characters")
+                raise ValueError("Production requires a unique WEBHOOK_ENCRYPTION_KEY of at least 32 characters")            database = urlsplit(self.database_url)
+            if (database.hostname or "").lower() == "db":
+                database_password = self.postgres_password.get_secret_value() if self.postgres_password else ""
+                if (
+                    len(database_password) < 32
+                    or not database_password.isalnum()
+                    or self._is_secret_placeholder(database_password)
+                    or database.password != database_password
+                    or database_password in {self.jwt_secret_key, self.webhook_encryption_key}
+                ):
+                    raise ValueError(
+                        "Production Compose requires a unique POSTGRES_PASSWORD of at least 32 URL-safe alphanumeric characters matching DATABASE_URL"
+                    )
             if not self.cors_origins:
                 raise ValueError("Production CORS_ORIGINS must include the public HTTPS app origin for cookie-session CSRF protection")
             if "*" in self.cors_origins:
