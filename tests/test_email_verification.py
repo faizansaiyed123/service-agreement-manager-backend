@@ -63,7 +63,6 @@ def test_signup_requires_mailbox_owner_to_choose_final_password(client, monkeypa
 
     token, notification_id = verification_token_from_outbox(email)
     assert token not in response.text
-    assert client.get(f"/api/v1/notifications/{notification_id}", headers={"Origin": origin}).status_code == 401
 
     confirmed = client.post(
         "/api/v1/auth/verify-email",
@@ -93,6 +92,12 @@ def test_signup_requires_mailbox_owner_to_choose_final_password(client, monkeypa
     assert "access_token" not in login.json()
     assert "refresh_token" not in login.json()
     assert any("HttpOnly" in value for value in login.headers.get_list("set-cookie"))
+
+    # Other users in the tenant must not be able to inspect the queued secret link.
+    protected_notification = client.get(f"/api/v1/notifications/{notification_id}", headers={"Origin": origin})
+    assert protected_notification.status_code == 404
+    protected_attempts = client.get(f"/api/v1/notifications/{notification_id}/attempts", headers={"Origin": origin})
+    assert protected_attempts.status_code == 404
 
     db = TestingSession()
     try:
