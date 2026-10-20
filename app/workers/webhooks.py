@@ -33,6 +33,10 @@ def validate_target(url: str) -> None:
     parsed = urlsplit(url)
     if parsed.scheme != "https" or not parsed.hostname:
         raise WebhookDeliveryError("Webhook target must use HTTPS")
+    if parsed.username or parsed.password:
+        raise WebhookDeliveryError("Webhook target must not embed credentials in the URL")
+    if parsed.port not in (None, 443):
+        raise WebhookDeliveryError("Webhook target must use the standard HTTPS port 443")
     try:
         addresses = {
             ipaddress.ip_address(result[4][0])
@@ -42,17 +46,12 @@ def validate_target(url: str) -> None:
                 type=socket.SOCK_STREAM,
             )
         }
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         raise WebhookDeliveryError("Webhook target hostname could not be resolved") from exc
+    if not addresses:
+        raise WebhookDeliveryError("Webhook target hostname did not resolve to an address")
     for address in addresses:
-        if (
-            address.is_private
-            or address.is_loopback
-            or address.is_link_local
-            or address.is_multicast
-            or address.is_reserved
-            or address.is_unspecified
-        ):
+        if not address.is_global:
             raise WebhookDeliveryError("Webhook target resolves to a non-public network address")
 
 
@@ -86,14 +85,24 @@ def send_webhook(endpoint: WebhookEndpoint, delivery: WebhookDelivery) -> tuple[
         "X-SAM-Webhook-Timestamp": str(timestamp),
         "X-SAM-Webhook-Signature": sign_payload(body, secret, timestamp),
     }
-    with httpx.Client(timeout=10.0, follow_redirects=False) as client:
-        response = client.post(endpoint.url, content=body, headers=headers)
-    response_body = response.text[:4000]
-    if not 200 <= response.status_code < 300:
+    # Avoid ambient HTTP proxy settings and never buffer an unbounded response body.
+    with httpx.Client(timeout=httpx.Timeout(10.0, read=3.0), follow_redirects=False, trust_env=False) as client:
+        with client.stream("POST", endpoint.url, content=body, headers=headers) as response:
+            response_status = response.status_code
+            response_bytes = bytearray()
+            deadline = time.monotonic() + 10.0
+            for chunk in response.iter_bytes():
+                remaining = 4000 - len(response_bytes)
+                if remaining > 0:
+                    response_bytes.extend(chunk[:remaining])
+                if len(response_bytes) >= 4000 or time.monotonic() >= deadline:
+                    break
+            response_body = response_bytes.decode("utf-8", errors="replace")
+    if not 200 <= response_status < 300:
         raise WebhookDeliveryError(
-            f"Webhook endpoint returned HTTP {response.status_code}: {response_body}"
+            f"Webhook endpoint returned HTTP {response_status}: {response_body}"
         )
-    return response.status_code, response_body
+    return response_status, response_body
 
 
 def safe_error(exc: Exception) -> str:
