@@ -13,7 +13,7 @@ from app.core.errors import DomainError
 from app.core.rate_limit import enforce_rate_limit
 from app.core.security import create_token, decode_token, hash_password, verify_password
 from app.db.session import get_db
-from app.models import AuthSession, Company, User
+from app.models import AuthSession, Company, PasswordResetToken, User
 from app.schemas import AuthenticatedSession, LoginRequest, RefreshRequest, RegisterRequest, TokenPair, UserRead
 from app.user_schemas import PasswordChange
 
@@ -148,6 +148,13 @@ def change_password(
         raise DomainError(409, "password_unchanged", "New password must differ from current password")
     user.password_hash = hash_password(payload.new_password)
     now = datetime.now(UTC)
+    reset_tokens = db.scalars(select(PasswordResetToken).where(
+        PasswordResetToken.user_id == user.id,
+        PasswordResetToken.used_at.is_(None),
+        PasswordResetToken.revoked_at.is_(None),
+    ).with_for_update()).all()
+    for reset_token in reset_tokens:
+        reset_token.revoked_at = now
     sessions = db.scalars(select(AuthSession).where(
         AuthSession.user_id == user.id,
         AuthSession.revoked_at.is_(None),
