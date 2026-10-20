@@ -8,7 +8,7 @@ REFRESH_COOKIE = "sam_refresh"
 
 def set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
     settings = get_settings()
-    secure = settings.app_env.lower() == "production"
+    secure = settings.app_env.lower() not in {"development", "test"}
     access_path = settings.api_v1_prefix.rstrip("/") or "/"
     refresh_path = f"{access_path}/auth/refresh"
     response.set_cookie(
