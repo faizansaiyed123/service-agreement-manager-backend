@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     refresh_token_days: int = 14
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:3000", "http://localhost:5173"]
     cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+    allow_public_registration: bool = True
     log_level: str = "INFO"
     smtp_host: str | None = None
     smtp_port: int = Field(default=587, ge=1, le=65535)
@@ -80,6 +81,8 @@ class Settings(BaseSettings):
         if self.app_env.lower() == "production":
             if self.debug:
                 raise ValueError("DEBUG must be false in production")
+            if self.allow_public_registration:
+                raise ValueError("Public registration must remain disabled in production until email ownership verification is implemented")
             if self._is_secret_placeholder(self.jwt_secret_key) or len(self.jwt_secret_key) < 48:
                 raise ValueError("Production requires a unique JWT_SECRET_KEY of at least 48 characters")
             if self._is_secret_placeholder(self.webhook_encryption_key) or len(self.webhook_encryption_key) < 32:
