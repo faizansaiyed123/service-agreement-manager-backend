@@ -99,6 +99,23 @@ def test_production_settings_require_secure_external_endpoints():
 
 
 
+def test_production_compose_requires_a_strong_matching_database_password():
+    password = "A9" * 32
+    database_url = f"postgresql+psycopg://sam:{password}@db:5432/service_agreements"
+    valid_production_settings(database_url=database_url, postgres_password=password).validate_production()
+
+    with pytest.raises(ValueError, match="POSTGRES_PASSWORD"):
+        valid_production_settings(
+            database_url=database_url,
+            postgres_password="B8" * 32,
+        ).validate_production()
+
+    with pytest.raises(ValueError, match="POSTGRES_PASSWORD"):
+        valid_production_settings(
+            database_url="postgresql+psycopg://sam:REPLACE_WITH_URL_SAFE_RANDOM_PASSWORD@db:5432/service_agreements",
+            postgres_password="REPLACE_WITH_URL_SAFE_RANDOM_PASSWORD",
+        ).validate_production()
+
 def test_production_settings_reject_secret_placeholders():
     with pytest.raises(ValueError, match="JWT_SECRET_KEY"):
         valid_production_settings(
