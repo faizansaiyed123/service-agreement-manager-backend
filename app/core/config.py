@@ -85,6 +85,23 @@ class Settings(BaseSettings):
                 raise ValueError("Production requires a unique JWT_SECRET_KEY of at least 48 characters")
             if self._is_secret_placeholder(self.webhook_encryption_key) or len(self.webhook_encryption_key) < 32:
                 raise ValueError("Production requires a unique WEBHOOK_ENCRYPTION_KEY of at least 32 characters")
+            database = urlsplit(self.database_url)
+            database_host = (database.hostname or "").lower()
+            database_password = database.password or ""
+            if (
+                database.scheme != "postgresql+psycopg"
+                or not database_host
+                or not database.username
+                or len(database_password) < 32
+                or self._is_secret_placeholder(database_password)
+            ):
+                raise ValueError("Production DATABASE_URL must use PostgreSQL credentials with a non-placeholder password of at least 32 characters")
+            if database_host in {"localhost", "127.0.0.1", "::1"} or database_host.endswith(".localhost"):
+                raise ValueError("Production DATABASE_URL cannot point to localhost")
+            if database_host != "db" and not database_host.endswith(".internal"):
+                database_options = dict(item.split("=", 1) for item in database.query.split("&") if "=" in item)
+                if database_options.get("sslmode") not in {"require", "verify-ca", "verify-full"}:
+                    raise ValueError("Production external PostgreSQL connections must use sslmode=require or stronger")
             if not self.redis_url:
                 raise ValueError("Production requires REDIS_URL for shared authentication rate limits")
             redis = urlsplit(self.redis_url)
@@ -144,6 +161,8 @@ class Settings(BaseSettings):
                 or not reset_url.hostname
                 or reset_url.hostname.lower() in {"localhost", "127.0.0.1", "::1"}
                 or reset_url.hostname.lower().endswith(".localhost")
+                or reset_url.username
+                or reset_url.password
                 or reset_url.query
                 or reset_url.fragment
             ):
