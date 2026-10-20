@@ -10,6 +10,8 @@ from app.core.errors import DomainError
 _lock = Lock()
 _attempts: dict[tuple[str, str, str], tuple[int, deque[float]]] = {}
 _last_sweep = 0.0
+_MAX_TRACKED_BUCKETS = 20_000
+_EVICT_BUCKETS = 256
 
 
 def enforce_rate_limit(
@@ -36,6 +38,10 @@ def enforce_rate_limit(
     with _lock:
         stored = _attempts.get(key)
         if stored is None:
+            if len(_attempts) >= _MAX_TRACKED_BUCKETS:
+                # Bound memory when many unique network addresses/identifiers arrive.
+                for _ in range(min(_EVICT_BUCKETS, len(_attempts))):
+                    _attempts.pop(next(iter(_attempts)))
             attempts: deque[float] = deque()
             _attempts[key] = (window_seconds, attempts)
         else:
