@@ -7,6 +7,7 @@ def valid_production_settings(**overrides) -> Settings:
     values = {
         "app_env": "production",
         "debug": False,
+        "allow_public_registration": False,
         "cors_origins": ["https://app.example.com"],
         "jwt_secret_key": "production-secret-value-that-is-longer-than-forty-eight-characters",
         "smtp_host": "smtp.example.com",
@@ -17,6 +18,11 @@ def valid_production_settings(**overrides) -> Settings:
     }
     values.update(overrides)
     return Settings(**values)
+
+
+def test_production_settings_reject_unverified_public_registration():
+    with pytest.raises(ValueError, match="email ownership verification"):
+        valid_production_settings(allow_public_registration=True).validate_production()
 
 
 def test_production_settings_require_secure_recovery_delivery():
