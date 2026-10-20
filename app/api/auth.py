@@ -49,6 +49,9 @@ def browser_or_api_session(
 
 @router.post("/register", response_model=TokenPair | AuthenticatedSession, status_code=201)
 def register(payload: RegisterRequest, request: Request, response: Response, db: Session = Depends(get_db)) -> TokenPair | AuthenticatedSession:
+    settings = get_settings()
+    if settings.app_env.lower() == "production" and not settings.allow_public_registration:
+        raise DomainError(403, "registration_disabled", "Public registration is disabled. Ask your workspace administrator for access.")
     email = str(payload.email).lower()
     enforce_rate_limit(request, scope="register-ip", limit=10, window_seconds=3600)
     enforce_rate_limit(request, scope="register-email", limit=3, window_seconds=3600, subject=email, by_ip=False)
