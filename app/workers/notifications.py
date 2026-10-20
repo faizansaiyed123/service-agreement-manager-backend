@@ -87,6 +87,8 @@ def claim_due_notifications(db: Session, *, batch_size: int = 10) -> list[tuple[
             record.status = "dead"
             record.locked_until = None
             record.last_error = record.last_error or "Maximum delivery attempts reached"
+            if record.event_type in {"auth.password_reset", "auth.email_verification"}:
+                record.body = "[redacted after authentication email delivery failure]"
             continue
         record.attempt_count += 1
         record.status = "processing"
@@ -136,6 +138,8 @@ def deliver_claimed(
             record.locked_until = None
             if record.attempt_count >= record.max_attempts:
                 record.status = "dead"
+                if record.event_type in {"auth.password_reset", "auth.email_verification"}:
+                    record.body = "[redacted after authentication email delivery failure]"
             else:
                 backoff = min(3600, 30 * (2 ** (attempt.attempt_number - 1)))
                 delay = max(1, int(backoff * random.uniform(0.8, 1.2)))
@@ -156,6 +160,8 @@ def deliver_claimed(
         if record is None or attempt is None or record.status != "processing" or attempt.status != "started":
             return
         record.status = "sent"
+        if record.event_type in {"auth.password_reset", "auth.email_verification"}:
+            record.body = "[redacted after successful authentication email delivery]"
         record.sent_at = now
         record.provider_message_id = provider_id
         record.locked_until = None
