@@ -16,6 +16,7 @@ def valid_production_settings(**overrides) -> Settings:
         "smtp_starttls": True,
         "password_reset_url": "https://app.example.com/reset-password",
         "webhook_encryption_key": "production-webhook-secret-value-that-is-at-least-32-chars",
+        "notification_encryption_key": "production-notification-secret-value-over-32-characters",
     }
     values.update(overrides)
     return Settings(**values)
@@ -130,4 +131,9 @@ def test_production_settings_reject_secret_placeholders():
     with pytest.raises(ValueError, match="WEBHOOK_ENCRYPTION_KEY"):
         valid_production_settings(
             webhook_encryption_key="replace-with-a-random-webhook-secret-of-at-least-64-characters"
+        ).validate_production()
+
+    with pytest.raises(ValueError, match="NOTIFICATION_ENCRYPTION_KEY"):
+        valid_production_settings(
+            notification_encryption_key="replace-with-a-random-notification-secret-of-at-least-64-characters"
         ).validate_production()
