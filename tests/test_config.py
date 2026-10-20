@@ -9,6 +9,7 @@ def valid_production_settings(**overrides) -> Settings:
         "debug": False,
         "cors_origins": ["https://app.example.com"],
         "jwt_secret_key": "production-secret-value-that-is-longer-than-forty-eight-characters",
+        "redis_url": "redis://:unique-ci-redis-password@redis:6379/0",
         "smtp_host": "smtp.example.com",
         "smtp_from_email": "no-reply@example.com",
         "smtp_starttls": True,
@@ -17,6 +18,19 @@ def valid_production_settings(**overrides) -> Settings:
     }
     values.update(overrides)
     return Settings(**values)
+
+
+def test_production_settings_require_authenticated_private_or_tls_redis():
+    with pytest.raises(ValueError, match="REDIS_URL"):
+        valid_production_settings(redis_url=None).validate_production()
+
+    with pytest.raises(ValueError, match="REDIS_URL"):
+        valid_production_settings(redis_url="redis://redis:6379/0").validate_production()
+
+    with pytest.raises(ValueError, match="TLS"):
+        valid_production_settings(redis_url="redis://cache.example.com:6379/0").validate_production()
+
+    valid_production_settings(redis_url="rediss://:strong-password@cache.example.com:6379/0").validate_production()
 
 
 def test_production_settings_require_secure_recovery_delivery():
