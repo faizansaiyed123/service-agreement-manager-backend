@@ -6,6 +6,7 @@ from app.core.config import Settings
 def valid_production_settings(**overrides) -> Settings:
     values = {
         "app_env": "production",
+        "database_url": "postgresql+psycopg://sam:unique-ci-database-password-long-enough-123456@db:5432/service_agreements",
         "debug": False,
         "cors_origins": ["https://app.example.com"],
         "jwt_secret_key": "production-secret-value-that-is-longer-than-forty-eight-characters",
@@ -28,9 +29,28 @@ def test_production_settings_require_authenticated_private_or_tls_redis():
         valid_production_settings(redis_url="redis://redis:6379/0").validate_production()
 
     with pytest.raises(ValueError, match="TLS"):
-        valid_production_settings(redis_url="redis://cache.example.com:6379/0").validate_production()
+        valid_production_settings(redis_url="redis://:strong-password@cache.example.com:6379/0").validate_production()
 
     valid_production_settings(redis_url="rediss://:strong-password@cache.example.com:6379/0").validate_production()
+
+
+def test_production_settings_require_strong_database_credentials_and_tls():
+    with pytest.raises(ValueError, match="DATABASE_URL"):
+        valid_production_settings(database_url="postgresql+psycopg://sam:sam_dev_only@localhost:5432/service_agreements").validate_production()
+
+    with pytest.raises(ValueError, match="localhost"):
+        valid_production_settings(
+            database_url="postgresql+psycopg://sam:unique-ci-database-password-long-enough-123456@localhost:5432/service_agreements"
+        ).validate_production()
+
+    with pytest.raises(ValueError, match="sslmode"):
+        valid_production_settings(
+            database_url="postgresql+psycopg://sam:unique-ci-database-password-long-enough-123456@db.example.com:5432/service_agreements"
+        ).validate_production()
+
+    valid_production_settings(
+        database_url="postgresql+psycopg://sam:unique-ci-database-password-long-enough-123456@db.example.com:5432/service_agreements?sslmode=verify-full"
+    ).validate_production()
 
 
 def test_production_settings_require_secure_recovery_delivery():
