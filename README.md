@@ -58,7 +58,7 @@ Real SMTP/SMS/S3 provider delivery, production deployment, TLS/proxy setup, secr
 
 ## Browser session security
 
-Browser login and registration return no bearer tokens in JSON. The API sets short-lived access and refresh tokens in `HttpOnly` cookies, validates exact trusted origins on browser requests, and applies CSRF checks to cookie-authenticated state changes. Browser clients must use cookies; bearer tokens remain supported for non-browser API clients. Authentication endpoints have process-local rate limits, which should be supplemented by a provider WAF before public launch.
+Browser login returns no bearer tokens in JSON. The API sets short-lived access and refresh tokens in `HttpOnly` cookies, validates exact trusted origins on browser requests, and applies CSRF checks to cookie-authenticated state changes. Browser clients must use cookies; bearer tokens remain supported for non-browser API clients. Authentication endpoints have process-local rate limits, which must be supplemented by a provider WAF. Production registration requires a single-use email verification link; the mailbox owner sets the final password after opening that link. Set `ALLOW_PUBLIC_REGISTRATION=false` for a private beta, and use `python -m app.cli create-owner` to bootstrap the first trusted owner.
 
 ## Production deployment
 

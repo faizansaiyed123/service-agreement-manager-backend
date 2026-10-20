@@ -46,7 +46,7 @@ def request_password_recovery(
         .with_for_update()
         .execution_options(populate_existing=True)
     )
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or not user.email_verified:
         return {"message": RECOVERY_MESSAGE}
     company = db.get(Company, user.company_id)
     if company is None or not company.is_active:

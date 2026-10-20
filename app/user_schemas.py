@@ -12,6 +12,13 @@ class UserCreate(BaseModel):
     password: str = Field(min_length=12, max_length=128)
     role: UserRole = "staff"
 
+    @field_validator("password")
+    @classmethod
+    def reject_blank_password(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Password cannot be blank")
+        return value
+
     @field_validator("full_name")
     @classmethod
     def normalize_name(cls, value: str) -> str:
@@ -30,7 +37,21 @@ class UserUpdate(BaseModel):
 class PasswordReset(BaseModel):
     new_password: str = Field(min_length=12, max_length=128)
 
+    @field_validator("new_password")
+    @classmethod
+    def reject_blank_password(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Password cannot be blank")
+        return value
+
 
 class PasswordChange(BaseModel):
     current_password: str = Field(min_length=1, max_length=128)
     new_password: str = Field(min_length=12, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def reject_blank_password(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Password cannot be blank")
+        return value
