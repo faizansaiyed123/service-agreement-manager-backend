@@ -68,6 +68,8 @@ async def request_context(request: Request, call_next):
         f"{settings.api_v1_prefix.rstrip('/')}/auth/register",
         f"{settings.api_v1_prefix.rstrip('/')}/auth/forgot-password",
         f"{settings.api_v1_prefix.rstrip('/')}/auth/reset-password",
+        f"{settings.api_v1_prefix.rstrip('/')}/auth/verify-email",
+        f"{settings.api_v1_prefix.rstrip('/')}/auth/resend-verification",
     }
     if request.method not in {"GET", "HEAD", "OPTIONS"} and request.url.path not in public_auth_paths:
         has_session_cookie = bool(request.cookies.get(ACCESS_COOKIE) or request.cookies.get(REFRESH_COOKIE))
