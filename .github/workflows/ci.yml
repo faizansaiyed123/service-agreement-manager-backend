@@ -261,7 +261,7 @@ jobs:
               *) args+=("$1"); shift ;;
             esac
           done
-          (("${#args[@]}" == 2)) || { echo "Expected source and destination" >&2; exit 2; }
+          [[ ${#args[@]} -eq 2 ]] || { echo "Expected source and destination" >&2; exit 2; }
           map_path() {
             case "$1" in
               s3://*) printf '%s/%s' "$AWS_FAKE_S3_ROOT" "${1#s3://}" ;;
