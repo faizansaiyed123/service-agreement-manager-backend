@@ -6,6 +6,7 @@ BACKEND_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${ENV_FILE:-$BACKEND_DIR/.env.production}"
 COMPOSE_FILE="${COMPOSE_FILE:-$BACKEND_DIR/docker-compose.production.yml}"
 BACKUP_DIRECTORY="${BACKUP_DIRECTORY:-/var/backups/service-agreement-manager}"
+BACKUP_LOCAL_RETENTION_DAYS="${BACKUP_LOCAL_RETENTION_DAYS:-14}"
 : "${BACKUP_ENCRYPTION_KEY:?Set BACKUP_ENCRYPTION_KEY in a root-readable backup environment file}"
 : "${BACKUP_S3_URI:?Set BACKUP_S3_URI to an off-site s3://bucket/prefix destination}"
 [[ -f "$ENV_FILE" ]] || { echo "Missing production environment file: $ENV_FILE" >&2; exit 1; }
@@ -15,6 +16,7 @@ command -v docker >/dev/null
 command -v gpg >/dev/null
 command -v aws >/dev/null || { echo "AWS CLI is required for off-site backup upload" >&2; exit 1; }
 command -v sha256sum >/dev/null
+[[ "$BACKUP_LOCAL_RETENTION_DAYS" =~ ^[1-9][0-9]*$ ]] || { echo "BACKUP_LOCAL_RETENTION_DAYS must be a positive integer" >&2; exit 1; }
 
 COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
 mkdir -p "$BACKUP_DIRECTORY"
@@ -58,6 +60,7 @@ tar -C "$WORK_DIR" -czf "$WORK_DIR/backup.tar.gz" database.dump attachments.tar.
 gpg --batch --yes --symmetric --cipher-algo AES256 --pinentry-mode loopback --passphrase-fd 3 --output "$OUTPUT" "$WORK_DIR/backup.tar.gz" 3<<<"$BACKUP_ENCRYPTION_KEY"
 chmod 600 "$OUTPUT"
 aws s3 cp --only-show-errors --sse AES256 "$OUTPUT" "${BACKUP_S3_URI%/}/$(basename "$OUTPUT")"
+find "$BACKUP_DIRECTORY" -maxdepth 1 -type f -name "service-agreement-manager-*.tar.gz.gpg" -mtime +"$BACKUP_LOCAL_RETENTION_DAYS" -delete
 
 echo "Encrypted backup created and uploaded: $(basename "$OUTPUT")"
 echo "Configure bucket versioning, restrictive access, and retention/lifecycle policy independently."
