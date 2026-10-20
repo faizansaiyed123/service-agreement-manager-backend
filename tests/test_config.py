@@ -10,7 +10,7 @@ def valid_production_settings(**overrides) -> Settings:
         "debug": False,
         "cors_origins": ["https://app.example.com"],
         "jwt_secret_key": "production-secret-value-that-is-longer-than-forty-eight-characters",
-        "redis_url": "redis://:unique-ci-redis-password@redis:6379/0",
+        "redis_url": "redis://:unique-ci-redis-password-at-least-32-chars-123456@redis:6379/0",
         "smtp_host": "smtp.example.com",
         "smtp_from_email": "no-reply@example.com",
         "smtp_starttls": True,
@@ -29,9 +29,9 @@ def test_production_settings_require_authenticated_private_or_tls_redis():
         valid_production_settings(redis_url="redis://redis:6379/0").validate_production()
 
     with pytest.raises(ValueError, match="TLS"):
-        valid_production_settings(redis_url="redis://:strong-password@cache.example.com:6379/0").validate_production()
+        valid_production_settings(redis_url="redis://:long-secure-ci-redis-password-1234567890@cache.example.com:6379/0").validate_production()
 
-    valid_production_settings(redis_url="rediss://:strong-password@cache.example.com:6379/0").validate_production()
+    valid_production_settings(redis_url="rediss://:long-secure-ci-redis-password-1234567890@cache.example.com:6379/0").validate_production()
 
 
 def test_production_settings_require_strong_database_credentials_and_tls():
