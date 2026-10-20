@@ -62,4 +62,4 @@ Browser login and registration return no bearer tokens in JSON. The API sets sho
 
 ## Production deployment
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for production environment setup, HTTPS reverse-proxy requirements, health checks, backups, and release verification. [docker-compose.production.yml](docker-compose.production.yml) binds the API to loopback and leaves PostgreSQL unpublished. The existing docker-compose.yml is for local development and publishes PostgreSQL/API ports; do not use it directly as a public production stack.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for production environment setup, HTTPS reverse-proxy requirements, shared-rate-limit configuration, encrypted off-site backup/restore scripts, health checks, and release verification. [docker-compose.production.yml](docker-compose.production.yml) binds the API to loopback and leaves PostgreSQL unpublished. The existing docker-compose.yml is for local development and publishes PostgreSQL/API ports; do not use it directly as a public production stack.
