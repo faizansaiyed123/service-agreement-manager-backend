@@ -21,7 +21,7 @@ Run the full test/lint suite locally:
     docker compose exec api ruff check .
     docker compose exec api alembic check
 
-OpenAPI / Swagger: http://localhost:8000/docs
+OpenAPI / Swagger (development only): http://localhost:8000/docs. Interactive API docs and the OpenAPI schema are disabled in production.
 Liveness: http://localhost:8000/health/live
 Readiness: http://localhost:8000/health/ready
 
