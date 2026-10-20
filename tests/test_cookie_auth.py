@@ -75,3 +75,36 @@ def test_login_throttles_repeated_bad_password_attempts(client):
         assert response.status_code == 401
     limited = client.post("/api/v1/auth/login", json={"email": email, "password": "wrong-password"})
     assert limited.status_code == 429
+
+
+def test_production_rate_limiter_fails_closed_if_redis_is_unavailable(client, monkeypatch):
+    from redis.exceptions import ConnectionError as RedisConnectionError
+
+    from app.core import rate_limit
+    from app.core.config import Settings
+
+    class UnavailableRedis:
+        def eval(self, *args, **kwargs):
+            raise RedisConnectionError("redis is unavailable")
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        rate_limit,
+        "get_settings",
+        lambda: Settings(
+            app_env="production",
+            redis_url="redis://:unit-test-secret@redis:6379/0",
+        ),
+    )
+    monkeypatch.setattr(rate_limit.Redis, "from_url", lambda *args, **kwargs: UnavailableRedis())
+    rate_limit.clear_rate_limit_state()
+
+    response = client.post(
+        "/api/v1/auth/login",
+        headers={"Origin": "http://localhost:3000"},
+        json={"email": "closed@example.com", "password": "wrong-password"},
+    )
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "rate_limiter_unavailable"
