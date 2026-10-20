@@ -112,6 +112,7 @@ class Settings(BaseSettings):
                 or redis_host in {"localhost", "127.0.0.1", "::1"}
                 or redis_host.endswith(".localhost")
                 or not redis.password
+                or len(redis.password) < 32
                 or self._is_secret_placeholder(redis.password)
             ):
                 raise ValueError("Production REDIS_URL must use Redis authentication and a non-local host")
