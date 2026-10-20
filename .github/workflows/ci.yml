@@ -79,6 +79,7 @@ jobs:
           STORAGE_BACKEND=local
           STORAGE_ROOT=/srv/app/storage
           WEBHOOK_ENCRYPTION_KEY=ci-only-webhook-encryption-key-1234567890abcdef
+          NOTIFICATION_ENCRYPTION_KEY=ci-only-notification-encryption-key-1234567890abcdef
           POSTGRES_PASSWORD=ciPostgresPass0123456789abcdefABCDEF012345
           REDIS_PASSWORD=ciRedisPass0123456789abcdefABCDEF012345
           API_PORT=18000
