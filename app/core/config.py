@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     password_reset_token_minutes: int = Field(default=30, ge=1, le=1440)
     password_reset_cooldown_seconds: int = Field(default=60, ge=0, le=86400)
     password_reset_url: str = "http://localhost:3000/reset-password"
+    email_verification_token_minutes: int = Field(default=60, ge=5, le=1440)
+    email_verification_cooldown_seconds: int = Field(default=60, ge=0, le=86400)
+    email_verification_url: str = "http://localhost:3000/verify-email"
     storage_backend: str = "local"
     storage_root: str = "./storage"
     storage_max_file_bytes: int = Field(default=25 * 1024 * 1024, ge=1, le=500 * 1024 * 1024)
@@ -81,8 +84,6 @@ class Settings(BaseSettings):
         if self.app_env.lower() == "production":
             if self.debug:
                 raise ValueError("DEBUG must be false in production")
-            if self.allow_public_registration:
-                raise ValueError("Public registration must remain disabled in production until email ownership verification is implemented")
             if self._is_secret_placeholder(self.jwt_secret_key) or len(self.jwt_secret_key) < 48:
                 raise ValueError("Production requires a unique JWT_SECRET_KEY of at least 48 characters")
             if self._is_secret_placeholder(self.webhook_encryption_key) or len(self.webhook_encryption_key) < 32:
