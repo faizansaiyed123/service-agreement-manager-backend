@@ -11,3 +11,4 @@ class EmailVerificationRequest(BaseModel):
 
 class EmailVerificationConfirm(BaseModel):
     token: str = Field(min_length=32, max_length=256)
+    new_password: str = Field(min_length=12, max_length=128)
