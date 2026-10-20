@@ -156,6 +156,48 @@ jobs:
               rotated.update({name: value.value for name, value in parsed.items()})
           assert "sam_access" in rotated and "sam_refresh" in rotated, rotated
 
+          # Prove data created in one cookie-authenticated tenant cannot be read by another tenant.
+          status, second_headers, raw = request("/api/v1/auth/register", method="POST", headers={"Origin": origin}, body={
+              "company_name": "Second Production Smoke HVAC",
+              "full_name": "Second Smoke Owner",
+              "email": "prod-smoke-second@example.com",
+              "password": "correct-horse-battery-43",
+          })
+          second_payload = json.loads(raw)
+          assert status == 201 and second_payload.get("authenticated") is True, (status, second_payload)
+          second_cookies = {}
+          for item in second_headers.get_all("Set-Cookie") or []:
+              parsed = SimpleCookie()
+              parsed.load(item)
+              second_cookies.update({name: value.value for name, value in parsed.items()})
+          assert "sam_access" in second_cookies, second_cookies
+
+          first_auth = {"Origin": origin, "Cookie": "sam_access=" + rotated["sam_access"]}
+          second_auth = {"Origin": origin, "Cookie": "sam_access=" + second_cookies["sam_access"]}
+          status, _, raw = request("/api/v1/companies/current", headers=first_auth)
+          first_company = json.loads(raw)
+          assert status == 200, (status, raw)
+          status, _, raw = request("/api/v1/companies/current", headers=second_auth)
+          second_company = json.loads(raw)
+          assert status == 200 and first_company["id"] != second_company["id"], (status, first_company, second_company)
+
+          status, _, raw = request("/api/v1/customers", method="POST", headers=first_auth, body={
+              "name": "Cookie Tenant-Isolation Customer",
+              "kind": "commercial",
+              "email": "tenant-isolation@example.com",
+          })
+          customer = json.loads(raw)
+          assert status == 201, (status, customer)
+          status, _, raw = request("/api/v1/customers/" + customer["id"], headers=second_auth)
+          assert status == 404, (status, raw)
+          status, _, raw = request("/api/v1/customers", headers=second_auth)
+          assert status == 200 and all(row["id"] != customer["id"] for row in json.loads(raw)), (status, raw)
+          print("Cookie-authenticated cross-tenant isolation passed")
+
+          # Unknown Origin is blocked for reads as well as cookie-authenticated writes.
+          status, _, raw = request("/api/v1/customers", headers={"Origin": "https://attacker.example", "Cookie": "sam_access=" + rotated["sam_access"]})
+          assert status == 403, (status, raw)
+
           status, _, raw = request("/api/v1/auth/logout", method="POST", headers={"Cookie": "sam_access=" + rotated["sam_access"], "Origin": "https://attacker.example"})
           assert status == 403, (status, raw)
           status, headers, _ = request("/api/v1/auth/logout", method="POST", headers={"Cookie": "sam_access=" + rotated["sam_access"], "Origin": origin})
