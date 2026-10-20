@@ -244,9 +244,12 @@ jobs:
               payload = json.load(response)
           token = payload.get("access_token")
           assert token and payload.get("refresh_token")
-          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as environment:
-              environment.write("SAM_BACKUP_TEST_TOKEN=" + token + "\n")
+          token_path = os.path.join(os.environ["RUNNER_TEMP"], "sam-backup-test-token")
+          with open(token_path, "w", encoding="utf-8") as token_file:
+              token_file.write(token)
           PY
+          chmod 600 "$RUNNER_TEMP/sam-backup-test-token"
+          export SAM_BACKUP_TEST_TOKEN="$(cat "$RUNNER_TEMP/sam-backup-test-token")"
           mkdir -p "$RUNNER_TEMP/fake-aws" "$RUNNER_TEMP/fake-s3" "$RUNNER_TEMP/sam-backups"
           cat > "$RUNNER_TEMP/fake-aws/aws" <<'SH'
           #!/usr/bin/env bash
