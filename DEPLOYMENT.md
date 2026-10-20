@@ -29,7 +29,15 @@ docker compose --env-file .env.production -f docker-compose.production.yml ps
 docker compose --env-file .env.production -f docker-compose.production.yml logs --tail=200 api
 ```
 
-The API container applies Alembic migrations before starting. This Compose file is intended for a single API instance; do not scale API replicas that run migrations on startup. For a multi-instance deployment, run migrations once as a release step and use a managed database or carefully designed shared storage. Keep database upgrades and application releases coordinated, and take a backup before migrations.
+The API container applies Alembic migrations before starting. Public signup is intentionally disabled in production because the current registration flow does not prove control of the submitted email address. After the API is healthy, create the first trusted owner interactively from the backend repository root:
+
+```sh
+docker compose --env-file .env.production -f docker-compose.production.yml exec api python -m app.cli create-owner
+```
+
+Use an email address you control and enter the initial password at the hidden prompt; do not put that password on the command line. The owner can then create accounts for the private workspace. Do not enable `ALLOW_PUBLIC_REGISTRATION` until a complete email-verification flow is implemented and tested. The production frontend hides `/register` by default.
+
+This Compose file is intended for a single API instance; do not scale API replicas that run migrations on startup. For a multi-instance deployment, run migrations once as a release step and use a managed database or carefully designed shared storage. Keep database upgrades and application releases coordinated, and take a backup before migrations.
 
 The standard workers for billing, webhooks, maintenance, and account notifications are started with this configuration. SMS delivery is optional. Configure SMS_PROVIDER=http and its HTTPS credentials in .env.production, then start the SMS profile:
 
@@ -87,7 +95,7 @@ curl --fail http://127.0.0.1:8000/health/ready
 docker compose --env-file .env.production -f docker-compose.production.yml ps
 ```
 
-Also run the backend CI suite, frontend production build, and browser-based smoke tests against deployed URLs. Verify registration/login, token refresh/logout, password-reset email delivery, tenant isolation with two companies, attachments, invoice issue/payment/refund/credit calculations, CSV exports, webhook delivery, and worker restart behavior. Verify CORS rejects unconfigured origins, HTTP redirects to HTTPS at the edge, backups can be restored, and logs contain no secrets or access tokens. Health checks alone are not end-to-end validation.
+Also run the backend CI suite, frontend production build, and browser-based smoke tests against deployed URLs. Verify owner bootstrap/login, that public signup is rejected, token refresh/logout, password-reset email delivery, tenant isolation with two companies, attachments, invoice issue/payment/refund/credit calculations, CSV exports, webhook delivery, and worker restart behavior. Verify CORS rejects unconfigured origins, HTTP redirects to HTTPS at the edge, backups can be restored, and logs contain no secrets or access tokens. Health checks alone are not end-to-end validation.
 
 ## 7. Abuse protection at the edge
 
