@@ -28,3 +28,37 @@ def test_user_admin_tenant_scope_and_logout_revocation(client):
     assert client.post("/api/v1/auth/logout", headers=headers).status_code == 204
     assert client.get("/api/v1/auth/me", headers=headers).status_code == 401
     assert client.post("/api/v1/auth/refresh", json={"refresh_token": first["refresh_token"]}).status_code == 401
+
+
+def test_deactivating_user_revokes_active_access_and_refresh_sessions(client):
+    owner = register(client, "session-admin@example.com")
+    owner_headers = {"Authorization": f"Bearer {owner['access_token']}"}
+
+    created = client.post("/api/v1/users", headers=owner_headers, json={
+        "full_name": "Revocable Technician",
+        "email": "revocable-tech@example.com",
+        "password": "technician-password-42",
+        "role": "technician",
+    })
+    assert created.status_code == 201, created.text
+    technician = client.post("/api/v1/auth/login", json={
+        "email": "revocable-tech@example.com",
+        "password": "technician-password-42",
+    })
+    assert technician.status_code == 200, technician.text
+    tokens = technician.json()
+    tech_headers = {"Authorization": f"Bearer {tokens['access_token']}"}
+    assert client.get("/api/v1/auth/me", headers=tech_headers).status_code == 200
+
+    deactivated = client.patch(
+        f"/api/v1/users/{created.json()['id']}",
+        headers=owner_headers,
+        json={"is_active": False},
+    )
+    assert deactivated.status_code == 200, deactivated.text
+    assert deactivated.json()["is_active"] is False
+    assert client.get("/api/v1/auth/me", headers=tech_headers).status_code == 401
+    assert client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": tokens["refresh_token"]},
+    ).status_code == 401
