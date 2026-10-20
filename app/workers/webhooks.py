@@ -1,17 +1,18 @@
 import hashlib
 import hmac
+import http.client
 import ipaddress
 import json
 import logging
 import random
 import socket
+import ssl
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlsplit
 from uuid import UUID
 
-import httpx
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
@@ -29,7 +30,7 @@ class WebhookDeliveryError(RuntimeError):
     pass
 
 
-def validate_target(url: str) -> None:
+def validate_target(url: str) -> list[str]:
     parsed = urlsplit(url)
     if parsed.scheme != "https" or not parsed.hostname:
         raise WebhookDeliveryError("Webhook target must use HTTPS")
@@ -53,6 +54,32 @@ def validate_target(url: str) -> None:
     for address in addresses:
         if not address.is_global:
             raise WebhookDeliveryError("Webhook target resolves to a non-public network address")
+    # Pin the transport to the validated IP. The TLS context still verifies the original
+    # hostname, preventing a second DNS lookup from opening a rebinding/SSRF window.
+    return sorted(str(address) for address in addresses)
+
+
+class PinnedHTTPSConnection(http.client.HTTPSConnection):
+    """HTTPS connection pinned to a validated IP while preserving hostname TLS checks."""
+
+    def __init__(self, hostname: str, pinned_ip: str, *, timeout: float = 10.0) -> None:
+        super().__init__(
+            host=hostname,
+            port=443,
+            timeout=timeout,
+            context=ssl.create_default_context(),
+        )
+        self._pinned_ip = pinned_ip
+
+    def connect(self) -> None:
+        if self._tunnel_host:
+            raise WebhookDeliveryError("Proxy tunneling is not permitted for webhook delivery")
+        self.sock = socket.create_connection(
+            (self._pinned_ip, self.port),
+            self.timeout,
+            self.source_address,
+        )
+        self.sock = self._context.wrap_socket(self.sock, server_hostname=self.host)
 
 
 def render_payload(delivery: WebhookDelivery) -> bytes:
@@ -73,7 +100,10 @@ def sign_payload(body: bytes, secret: str, timestamp: int) -> str:
 
 def send_webhook(endpoint: WebhookEndpoint, delivery: WebhookDelivery) -> tuple[int, str]:
     settings = get_settings()
-    validate_target(endpoint.url)
+    addresses = validate_target(endpoint.url)
+    parsed = urlsplit(endpoint.url)
+    if not parsed.hostname:
+        raise WebhookDeliveryError("Webhook target hostname is missing")
     secret = decrypt_secret(endpoint.secret_ciphertext, settings.webhook_encryption_key)
     body = render_payload(delivery)
     timestamp = int(datetime.now(UTC).timestamp())
@@ -85,19 +115,18 @@ def send_webhook(endpoint: WebhookEndpoint, delivery: WebhookDelivery) -> tuple[
         "X-SAM-Webhook-Timestamp": str(timestamp),
         "X-SAM-Webhook-Signature": sign_payload(body, secret, timestamp),
     }
-    # Avoid ambient HTTP proxy settings and never buffer an unbounded response body.
-    with httpx.Client(timeout=httpx.Timeout(10.0, read=3.0), follow_redirects=False, trust_env=False) as client:
-        with client.stream("POST", endpoint.url, content=body, headers=headers) as response:
-            response_status = response.status_code
-            response_bytes = bytearray()
-            deadline = time.monotonic() + 10.0
-            for chunk in response.iter_bytes():
-                remaining = 4000 - len(response_bytes)
-                if remaining > 0:
-                    response_bytes.extend(chunk[:remaining])
-                if len(response_bytes) >= 4000 or time.monotonic() >= deadline:
-                    break
-            response_body = response_bytes.decode("utf-8", errors="replace")
+    request_target = parsed.path or "/"
+    if parsed.query:
+        request_target += "?" + parsed.query
+    # Connect to the validated literal IP; HTTP Host and TLS verification still use
+    # the user-configured hostname. Never follow redirects or inherit proxy variables.
+    with PinnedHTTPSConnection(parsed.hostname, addresses[0], timeout=10.0) as client:
+        client.request("POST", request_target, body=body, headers=headers)
+        if client.sock is not None:
+            client.sock.settimeout(3.0)
+        response = client.getresponse()
+        response_status = response.status
+        response_body = response.read(4000).decode("utf-8", errors="replace")
     if not 200 <= response_status < 300:
         raise WebhookDeliveryError(
             f"Webhook endpoint returned HTTP {response_status}: {response_body}"
