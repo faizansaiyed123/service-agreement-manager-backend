@@ -48,7 +48,7 @@ def get_current_user(
     if session_expiry <= datetime.now(UTC):
         raise DomainError(401, "invalid_session", "The user session has expired")
     user = db.get(User, user_id)
-    if user is None or not user.is_active or user.company_id != company_id:
+    if user is None or not user.is_active or not user.email_verified or user.company_id != company_id:
         raise DomainError(401, "invalid_session", "The user session is no longer valid")
     company = db.get(Company, company_id)
     if company is None or not company.is_active:
