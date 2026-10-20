@@ -53,16 +53,136 @@ jobs:
         run: |
           cp .env.production.example .env.production
           docker compose --env-file .env.production -f docker-compose.production.yml config --quiet
-      - name: Build production runtime image
+      - name: Build production runtime images
         run: docker compose --env-file .env.production -f docker-compose.production.yml build
-      - name: Prepare local environment
-        run: cp .env.example .env
-      - name: Start API and background workers
-        run: docker compose --profile email --profile sms up --build --wait -d
-      - name: Dump service logs if startup failed
+      - name: Create disposable production smoke-test secrets
+        run: |
+          cat > .env.production <<'EOF'
+          APP_NAME=Service Agreement Manager API
+          APP_ENV=production
+          DEBUG=false
+          API_V1_PREFIX=/api/v1
+          JWT_SECRET_KEY=ci-only-random-jwt-secret-for-production-smoke-test-1234567890
+          ACCESS_TOKEN_MINUTES=15
+          REFRESH_TOKEN_DAYS=14
+          CORS_ORIGINS=https://app.example.com
+          COOKIE_SAMESITE=lax
+          SMTP_HOST=smtp.example.com
+          SMTP_PORT=587
+          SMTP_FROM_EMAIL=no-reply@example.com
+          SMTP_STARTTLS=true
+          PASSWORD_RESET_URL=https://app.example.com/reset-password
+          STORAGE_BACKEND=local
+          STORAGE_ROOT=/srv/app/storage
+          WEBHOOK_ENCRYPTION_KEY=ci-only-webhook-encryption-key-1234567890abcdef
+          POSTGRES_PASSWORD=ciPostgresPass0123456789abcdef
+          REDIS_PASSWORD=ciRedisPass0123456789abcdef
+          API_PORT=18000
+          EOF
+          chmod 600 .env.production
+      - name: Start isolated production stack
+        run: docker compose --env-file .env.production -f docker-compose.production.yml up --build --wait -d
+      - name: Verify production health, cookie auth, CSRF and shared rate limiting
+        run: |
+          python - <<'PY'
+          import http.cookiejar
+          import json
+          import time
+          import urllib.error
+          import urllib.request
+          from http.cookies import SimpleCookie
+
+          base = "http://127.0.0.1:18000"
+          def request(path, *, method="GET", body=None, headers=None):
+              data = None if body is None else json.dumps(body).encode()
+              merged = {"Content-Type": "application/json"} if body is not None else {}
+              merged.update(headers or {})
+              req = urllib.request.Request(base + path, data=data, headers=merged, method=method)
+              try:
+                  with urllib.request.urlopen(req, timeout=5) as response:
+                      return response.status, response.headers, response.read()
+              except urllib.error.HTTPError as exc:
+                  return exc.code, exc.headers, exc.read()
+
+          for path in ("/health/live", "/health/ready"):
+              for attempt in range(30):
+                  status, _, body = request(path)
+                  if status == 200:
+                      print(path, body.decode())
+                      break
+                  time.sleep(2)
+              else:
+                  raise SystemExit(f"Production health check failed: {path} -> {status}")
+
+          origin = "https://app.example.com"
+          status, headers, raw = request("/api/v1/auth/register", method="POST", headers={"Origin": origin}, body={
+              "company_name": "Production Smoke HVAC",
+              "full_name": "Smoke Test Owner",
+              "email": "prod-smoke@example.com",
+              "password": "correct-horse-battery-42",
+          })
+          payload = json.loads(raw)
+          assert status == 201, (status, payload)
+          assert payload.get("authenticated") is True, payload
+          assert "access_token" not in payload and "refresh_token" not in payload, payload
+
+          cookie_values = {}
+          for item in headers.get_all("Set-Cookie") or []:
+              parsed = SimpleCookie()
+              parsed.load(item)
+              for name, morsel in parsed.items():
+                  cookie_values[name] = morsel.value
+                  assert morsel["httponly"], (name, item)
+                  assert morsel["secure"], (name, item)
+                  assert morsel["samesite"].lower() == "lax", (name, item)
+          assert "sam_access" in cookie_values and "sam_refresh" in cookie_values, cookie_values
+
+          access = cookie_values["sam_access"]
+          refresh = cookie_values["sam_refresh"]
+          status, _, raw = request("/api/v1/auth/me", headers={"Origin": origin, "Cookie": "sam_access=" + access})
+          assert status == 200, (status, raw)
+          status, refresh_headers, raw = request("/api/v1/auth/refresh", method="POST", headers={"Origin": origin, "Cookie": "sam_refresh=" + refresh})
+          payload = json.loads(raw)
+          assert status == 200 and payload.get("authenticated") is True, (status, payload)
+          assert "access_token" not in payload and "refresh_token" not in payload, payload
+          rotated = {}
+          for item in refresh_headers.get_all("Set-Cookie") or []:
+              parsed = SimpleCookie()
+              parsed.load(item)
+              rotated.update({name: value.value for name, value in parsed.items()})
+          assert "sam_access" in rotated and "sam_refresh" in rotated, rotated
+
+          status, _, raw = request("/api/v1/auth/logout", method="POST", headers={"Cookie": "sam_access=" + rotated["sam_access"], "Origin": "https://attacker.example"})
+          assert status == 403, (status, raw)
+          status, headers, _ = request("/api/v1/auth/logout", method="POST", headers={"Cookie": "sam_access=" + rotated["sam_access"], "Origin": origin})
+          assert status == 204, status
+          print("Production cookie, refresh rotation, origin/CSRF, and logout checks passed")
+
+          for attempt in range(10):
+              status, _, _ = request("/api/v1/auth/login", method="POST", headers={"Origin": origin}, body={
+                  "email": "prod-smoke@example.com", "password": "deliberately-wrong",
+              })
+              assert status == 401, (attempt, status)
+          status, _, raw = request("/api/v1/auth/login", method="POST", headers={"Origin": origin}, body={
+              "email": "prod-smoke@example.com", "password": "deliberately-wrong",
+          })
+          assert status == 429, (status, raw)
+          print("Redis-backed authentication rate limiting passed")
+          PY
+      - name: Dump production service logs if startup failed
         if: failure()
-        run: docker compose --profile email --profile sms logs --no-color db api webhook-worker maintenance-worker notification-worker sms-worker || true
-      - name: Verify database readiness through the API
+        run: docker compose --env-file .env.production -f docker-compose.production.yml logs --no-color db redis api billing-worker webhook-worker maintenance-worker notification-worker sms-worker || true
+      - name: Stop production smoke-test stack
+        if: always()
+        run: docker compose --env-file .env.production -f docker-compose.production.yml down -v || true
+      - name: Prepare local development environment
+        if: success()
+        run: cp .env.example .env
+      - name: Start local API and background workers
+        if: success()
+        run: docker compose --profile email --profile sms up --build --wait -d
+      - name: Verify local API readiness
+        if: success()
         run: |
           python - <<'PY'
           import time
@@ -83,8 +203,9 @@ jobs:
           else:
               raise SystemExit(f"API readiness check failed: {last_error}")
           PY
-      - name: Show service status
+      - name: Show local service status
+        if: success()
         run: docker compose --profile email --profile sms ps
-      - name: Tear down containers
+      - name: Tear down local containers
         if: always()
-        run: docker compose --profile email --profile sms down -v
+        run: docker compose --profile email --profile sms down -v || true
