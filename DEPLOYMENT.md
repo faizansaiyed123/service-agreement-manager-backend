@@ -10,11 +10,11 @@ Use a supported Linux host, restrict SSH, enable unattended security updates, an
 
 Copy .env.production.example to .env.production and replace every placeholder before starting the services.
 
-Generate independent cryptographically random values for JWT_SECRET_KEY (at least 48 characters) and WEBHOOK_ENCRYPTION_KEY (at least 32 characters). Use a URL-safe alphanumeric POSTGRES_PASSWORD because Compose inserts it into the database URL. Do not commit .env.production. Keep backups of secrets in an approved secrets manager; do not paste them into tickets or chat.
+Generate independent cryptographically random values for JWT_SECRET_KEY (at least 48 characters), WEBHOOK_ENCRYPTION_KEY (at least 32 characters), POSTGRES_PASSWORD, and REDIS_PASSWORD. Keep database/Redis passwords URL-safe alphanumeric because Compose inserts them into service URLs. Do not commit .env.production. Keep secrets in an approved secrets manager; do not paste them into tickets or chat. Production Compose runs Redis on the private container network with password authentication and no published host port; the API fails closed for protected auth flows if the shared limiter is unavailable.
 
 Set CORS_ORIGINS to the exact public HTTPS app origin, without a trailing slash. It is also the server-side trusted Origin allowlist for cookie-session CSRF protection, so it must not be empty in production, even for the recommended same-origin proxy setup. Set COOKIE_SAMESITE=lax for same-origin or same-site deployments. Set PASSWORD_RESET_URL to the real frontend password-reset page. Configure working SMTP values: production startup intentionally fails if SMTP_HOST or SMTP_FROM_EMAIL is missing, or if STARTTLS is disabled.
 
-For file uploads, local storage is persisted in the named attachments_data volume and is suitable only when one app instance shares that volume. Use the configured S3-compatible backend with HTTPS for horizontally scaled instances, and configure bucket access with a least-privilege identity. Arrange automated, encrypted backups and test restoration for the database and attachments before accepting real data.
+For file uploads, local storage is persisted in the named attachments_data volume and is suitable only when one app instance shares that volume. The HTTPS proxy must cap request bodies to slightly above the configured 25 MiB upload limit; the sample Caddy site uses a 30 MiB limit so oversized multipart requests are rejected before reaching FastAPI. Use the configured S3-compatible backend with HTTPS for horizontally scaled instances, and configure bucket access with a least-privilege identity. Arrange automated, encrypted backups and test restoration for the database and attachments before accepting real data.
 
 ## 3. Validate, build, and start
 
@@ -31,7 +31,7 @@ docker compose --env-file .env.production -f docker-compose.production.yml logs 
 
 The API container applies Alembic migrations before starting. This Compose file is intended for a single API instance; do not scale API replicas that run migrations on startup. For a multi-instance deployment, run migrations once as a release step and use a managed database or carefully designed shared storage. Keep database upgrades and application releases coordinated, and take a backup before migrations.
 
-The standard workers for billing, webhooks, maintenance, and account notifications are started with this configuration. SMS delivery is optional. Configure SMS_PROVIDER=http and its HTTPS credentials in .env.production, then start the SMS profile:
+The production stack starts authenticated Redis for shared sliding-window authentication limits, in addition to PostgreSQL and the API. Redis has no public port and does not persist rate-limit counters. The standard workers for billing, webhooks, maintenance, and account notifications are started with this configuration. SMS delivery is optional. Configure SMS_PROVIDER=http and its HTTPS credentials in .env.production, then start the SMS profile:
 
 ```sh
 docker compose --env-file .env.production -f docker-compose.production.yml --profile sms up --build -d
@@ -56,6 +56,9 @@ Install Caddy on the host and configure a site for your real domain (replace `ap
 
 ```caddyfile
 app.example.com {
+    request_body {
+        max_size 30MB
+    }
     encode zstd gzip
     header Strict-Transport-Security "max-age=31536000"
 
@@ -91,7 +94,7 @@ Also run the backend CI suite, frontend production build, and browser-based smok
 
 ## 7. Abuse protection at the edge
 
-The application now applies sliding-window limits to login (per IP and account identifier), registration, password-reset requests, and reset confirmations. These counters are process-local, reset on restart, and are not shared across replicas; they are defense in depth, not a complete distributed abuse control. Before public launch, enable provider-level WAF/rate-limiting rules for `/api/v1/auth/login`, `/api/v1/auth/register`, `/api/v1/auth/forgot-password`, and `/api/v1/auth/reset-password`, and monitor repeated 401/429 responses and registration spikes. If the service later runs multiple API replicas, use a shared rate-limit store. Do not rely on CORS as an abuse control.
+The application now applies Redis-backed shared sliding-window limits to login (per IP and account identifier), registration, password-reset requests, and reset confirmations. If Redis is unavailable, authentication operations fail closed instead of bypassing limits. Redis is still a single service in the single-host Compose deployment; monitor it and maintain provider-level WAF/rate-limiting rules for `/api/v1/auth/login`, `/api/v1/auth/register`, `/api/v1/auth/forgot-password`, and `/api/v1/auth/reset-password`. A WAF is necessary to reject floods before they reach the app. Monitor repeated 401/429 responses and registration spikes. Do not rely on CORS as an abuse control.
 
 ## 8. Operational essentials
 
