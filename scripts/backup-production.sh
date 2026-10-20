@@ -18,7 +18,7 @@ command -v aws >/dev/null || { echo "AWS CLI is required for off-site backup upl
 command -v sha256sum >/dev/null
 [[ "$BACKUP_LOCAL_RETENTION_DAYS" =~ ^[1-9][0-9]*$ ]] || { echo "BACKUP_LOCAL_RETENTION_DAYS must be a positive integer" >&2; exit 1; }
 
-COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
+COMPOSE=(docker compose --profile sms --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
 mkdir -p "$BACKUP_DIRECTORY"
 chmod 700 "$BACKUP_DIRECTORY"
 WORK_DIR="$(mktemp -d)"
