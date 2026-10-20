@@ -32,6 +32,10 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -e ".[dev]"
+      - name: Audit Python dependencies for known vulnerabilities
+        run: |
+          python -m pip install --no-cache-dir pip-audit
+          pip-audit --progress-spinner off
       - run: ruff check .
       - name: Upgrade PostgreSQL schema
         run: alembic upgrade head
