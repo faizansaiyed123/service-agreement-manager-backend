@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     refresh_token_days: int = 14
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:3000", "http://localhost:5173"]
     cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+    redis_url: str | None = None
     log_level: str = "INFO"
     smtp_host: str | None = None
     smtp_port: int = Field(default=587, ge=1, le=65535)
@@ -84,6 +85,21 @@ class Settings(BaseSettings):
                 raise ValueError("Production requires a unique JWT_SECRET_KEY of at least 48 characters")
             if self._is_secret_placeholder(self.webhook_encryption_key) or len(self.webhook_encryption_key) < 32:
                 raise ValueError("Production requires a unique WEBHOOK_ENCRYPTION_KEY of at least 32 characters")
+            if not self.redis_url:
+                raise ValueError("Production requires REDIS_URL for shared authentication rate limits")
+            redis = urlsplit(self.redis_url)
+            redis_host = (redis.hostname or "").lower()
+            if (
+                redis.scheme not in {"redis", "rediss"}
+                or not redis_host
+                or redis_host in {"localhost", "127.0.0.1", "::1"}
+                or redis_host.endswith(".localhost")
+                or not redis.password
+                or self._is_secret_placeholder(redis.password)
+            ):
+                raise ValueError("Production REDIS_URL must use Redis authentication and a non-local host")
+            if redis.scheme == "redis" and redis_host not in {"redis"} and not redis_host.endswith(".internal"):
+                raise ValueError("Production external Redis services must use TLS (rediss://)")
             if not self.cors_origins:
                 raise ValueError("Production CORS_ORIGINS must include the public HTTPS app origin for cookie-session CSRF protection")
             if "*" in self.cors_origins:
