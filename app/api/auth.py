@@ -24,6 +24,7 @@ from app.user_schemas import PasswordChange
 from app.email_verification_schemas import EmailVerificationConfirm, EmailVerificationRequest, RegistrationPending
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
+_DUMMY_PASSWORD_HASH = hash_password(secrets.token_urlsafe(32))
 REGISTRATION_MESSAGE = "If this email address can be registered, verification instructions will be sent."
 INVALID_VERIFICATION_MESSAGE = "The email verification link is invalid or expired."
 
@@ -245,7 +246,9 @@ def login(payload: LoginRequest, request: Request, response: Response, db: Sessi
     enforce_rate_limit(request, scope="login-ip", limit=30, window_seconds=60)
     enforce_rate_limit(request, scope="login-email", limit=10, window_seconds=900, subject=email, by_ip=False)
     user = db.scalar(select(User).where(User.email == email))
-    if user is None or not verify_password(payload.password, user.password_hash):
+    password_hash = user.password_hash if user is not None else _DUMMY_PASSWORD_HASH
+    password_matches = verify_password(payload.password, password_hash)
+    if user is None or not password_matches:
         raise DomainError(401, "invalid_credentials", "Email or password is incorrect")
     if not user.is_active:
         raise DomainError(403, "user_inactive", "This user account is inactive")
