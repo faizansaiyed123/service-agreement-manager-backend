@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 
 from app.models import User, WebhookDelivery
 from app.webhook_service import publish_webhook_event
-from app.workers.webhooks import WebhookDeliveryError, run_once, sign_payload, validate_target
+from app.workers.webhooks import PinnedHTTPSConnection, WebhookDeliveryError, run_once, sign_payload, validate_target
 from conftest import TestingSession
 
 
@@ -46,7 +46,26 @@ def test_webhook_target_validation_blocks_private_addresses_and_nonstandard_urls
             (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", port))
         ],
     )
-    validate_target("https://customer-webhook.example/webhook")
+    validated = validate_target("https://customer-webhook.example/webhook")
+    assert validated == ["93.184.216.34"]
+
+    # Prove the socket connects to the prevalidated literal IP while TLS SNI/certificate
+    # verification still use the requested hostname.
+    captured = {}
+    class FakeContext:
+        def wrap_socket(self, sock, *, server_hostname):
+            captured["server_hostname"] = server_hostname
+            return sock
+
+    monkeypatch.setattr(
+        "app.workers.webhooks.socket.create_connection",
+        lambda address, timeout, source_address: (captured.update(address=address) or object()),
+    )
+    connection = PinnedHTTPSConnection("customer-webhook.example", validated[0])
+    connection._context = FakeContext()
+    connection.connect()
+    assert captured["address"] == ("93.184.216.34", 443)
+    assert captured["server_hostname"] == "customer-webhook.example"
 
 
 def test_webhook_endpoint_crud_secret_rotation_and_https_validation(client):
