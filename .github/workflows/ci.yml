@@ -26,7 +26,7 @@ jobs:
       APP_ENV: test
       JWT_SECRET_KEY: test-secret-with-more-than-32-characters-long
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -52,7 +52,7 @@ jobs:
   compose-smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Validate production Compose configuration
         run: |
           cp .env.production.example .env.production
