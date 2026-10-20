@@ -16,6 +16,13 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=12, max_length=128)
 
+    @field_validator("password")
+    @classmethod
+    def reject_blank_password(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Password cannot be blank")
+        return value
+
 
 class LoginRequest(BaseModel):
     email: EmailStr
