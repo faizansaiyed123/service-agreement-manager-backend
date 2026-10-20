@@ -88,7 +88,8 @@ class Settings(BaseSettings):
             if self._is_secret_placeholder(self.jwt_secret_key) or len(self.jwt_secret_key) < 48:
                 raise ValueError("Production requires a unique JWT_SECRET_KEY of at least 48 characters")
             if self._is_secret_placeholder(self.webhook_encryption_key) or len(self.webhook_encryption_key) < 32:
-                raise ValueError("Production requires a unique WEBHOOK_ENCRYPTION_KEY of at least 32 characters")            database = urlsplit(self.database_url)
+                raise ValueError("Production requires a unique WEBHOOK_ENCRYPTION_KEY of at least 32 characters")
+            database = urlsplit(self.database_url)
             if (database.hostname or "").lower() == "db":
                 database_password = self.postgres_password.get_secret_value() if self.postgres_password else ""
                 if (
