@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     storage_access_key_id: str | None = None
     storage_secret_access_key: str | None = None
     webhook_encryption_key: str = "unsafe-development-webhook-key-change-this"
+    notification_encryption_key: str = "unsafe-development-notification-key-change-this"
     webhook_poll_seconds: int = Field(default=5, ge=1, le=300)
     webhook_lease_seconds: int = Field(default=60, ge=5, le=3600)
     webhook_default_max_attempts: int = Field(default=8, ge=1, le=20)
@@ -85,6 +86,8 @@ class Settings(BaseSettings):
                 raise ValueError("Production requires a unique JWT_SECRET_KEY of at least 48 characters")
             if self._is_secret_placeholder(self.webhook_encryption_key) or len(self.webhook_encryption_key) < 32:
                 raise ValueError("Production requires a unique WEBHOOK_ENCRYPTION_KEY of at least 32 characters")
+            if self._is_secret_placeholder(self.notification_encryption_key) or len(self.notification_encryption_key) < 32:
+                raise ValueError("Production requires a unique NOTIFICATION_ENCRYPTION_KEY of at least 32 characters")
             database = urlsplit(self.database_url)
             database_host = (database.hostname or "").lower()
             database_password = database.password or ""
