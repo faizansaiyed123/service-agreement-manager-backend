@@ -126,16 +126,13 @@ class Settings(BaseSettings):
                 raise ValueError("SMTP_STARTTLS must be enabled in production")
             if self.smtp_username and not self.smtp_password:
                 raise ValueError("SMTP_PASSWORD is required when SMTP_USERNAME is configured")
-            reset_url = urlsplit(self.password_reset_url)
-            if (
-                reset_url.scheme != "https"
-                or not reset_url.hostname
-                or reset_url.hostname.lower() in {"localhost", "127.0.0.1", "::1"}
-                or reset_url.hostname.lower().endswith(".localhost")
-                or reset_url.query
-                or reset_url.fragment
-            ):
-                raise ValueError("Production PASSWORD_RESET_URL must be a non-local HTTPS page URL without query or fragment")
+            trusted_origins = {origin.lower() for origin in self.cors_origins}
+            for value_name, value in (("PASSWORD_RESET_URL", self.password_reset_url), ("EMAIL_VERIFICATION_URL", self.email_verification_url)):
+                page = urlsplit(value)
+                origin = (page.scheme + "://" + page.netloc).lower()
+                invalid_local_host = not page.hostname or page.hostname.lower() in {"localhost", "127.0.0.1", "::1"} or page.hostname.lower().endswith(".localhost")
+                if page.scheme != "https" or invalid_local_host or page.query or page.fragment or origin not in trusted_origins:
+                    raise ValueError("Production recovery and verification URLs must use HTTPS on a trusted CORS_ORIGINS host and have no query or fragment")
 
 
 @lru_cache
