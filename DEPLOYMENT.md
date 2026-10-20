@@ -12,7 +12,7 @@ Copy .env.production.example to .env.production and replace every placeholder be
 
 Generate independent cryptographically random values for JWT_SECRET_KEY (at least 48 characters) and WEBHOOK_ENCRYPTION_KEY (at least 32 characters). Use a URL-safe alphanumeric POSTGRES_PASSWORD because Compose inserts it into the database URL. Do not commit .env.production. Keep backups of secrets in an approved secrets manager; do not paste them into tickets or chat.
 
-Set CORS_ORIGINS to the exact public HTTPS app origin, without a trailing slash. It is also the server-side trusted Origin allowlist for cookie-session CSRF protection, so it must not be empty in production, even for the recommended same-origin proxy setup. Set COOKIE_SAMESITE=lax for same-origin or same-site deployments. Set PASSWORD_RESET_URL to the real frontend password-reset page. Configure working SMTP values: production startup intentionally fails if SMTP_HOST or SMTP_FROM_EMAIL is missing, or if STARTTLS is disabled.
+Set CORS_ORIGINS to the exact public HTTPS app origin, without a trailing slash. It is also the server-side trusted Origin allowlist for cookie-session CSRF protection, so it must not be empty in production, even for the recommended same-origin proxy setup. Set COOKIE_SAMESITE=lax for same-origin or same-site deployments. Set PASSWORD_RESET_URL and EMAIL_VERIFICATION_URL to real frontend pages on that same HTTPS origin. Keep ALLOW_PUBLIC_REGISTRATION=true only if email verification and delivery are ready; signup remains pending until the recipient opens the single-use link and sets their own final password. Configure working SMTP values: production startup intentionally fails if SMTP_HOST or SMTP_FROM_EMAIL is missing, or if STARTTLS is disabled.
 
 For file uploads, local storage is persisted in the named attachments_data volume and is suitable only when one app instance shares that volume. Use the configured S3-compatible backend with HTTPS for horizontally scaled instances, and configure bucket access with a least-privilege identity. Arrange automated, encrypted backups and test restoration for the database and attachments before accepting real data.
 
@@ -29,13 +29,15 @@ docker compose --env-file .env.production -f docker-compose.production.yml ps
 docker compose --env-file .env.production -f docker-compose.production.yml logs --tail=200 api
 ```
 
-The API container applies Alembic migrations before starting. Public signup is intentionally disabled in production because the current registration flow does not prove control of the submitted email address. After the API is healthy, create the first trusted owner interactively from the backend repository root:
+The API container applies Alembic migrations before starting. In the production registration flow, a new workspace owner must verify control of the submitted email and choose the final password through the single-use link. Confirm the delivery worker is running and SMTP is configured before enabling public signup. For a private beta, set `ALLOW_PUBLIC_REGISTRATION=false` and build the frontend with `--build-arg VITE_PUBLIC_REGISTRATION=false`.
+
+An operator can alternatively bootstrap a trusted first owner after the API is healthy:
 
 ```sh
 docker compose --env-file .env.production -f docker-compose.production.yml exec api python -m app.cli create-owner
 ```
 
-Use an email address you control and enter the initial password at the hidden prompt; do not put that password on the command line. The owner can then create accounts for the private workspace. Do not enable `ALLOW_PUBLIC_REGISTRATION` until a complete email-verification flow is implemented and tested. The production frontend hides `/register` by default.
+Use an email address you control and enter the password at the hidden prompt; do not put it on the command line.
 
 This Compose file is intended for a single API instance; do not scale API replicas that run migrations on startup. For a multi-instance deployment, run migrations once as a release step and use a managed database or carefully designed shared storage. Keep database upgrades and application releases coordinated, and take a backup before migrations.
 
@@ -95,7 +97,7 @@ curl --fail http://127.0.0.1:8000/health/ready
 docker compose --env-file .env.production -f docker-compose.production.yml ps
 ```
 
-Also run the backend CI suite, frontend production build, and browser-based smoke tests against deployed URLs. Verify owner bootstrap/login, that public signup is rejected, token refresh/logout, password-reset email delivery, tenant isolation with two companies, attachments, invoice issue/payment/refund/credit calculations, CSV exports, webhook delivery, and worker restart behavior. Verify CORS rejects unconfigured origins, HTTP redirects to HTTPS at the edge, backups can be restored, and logs contain no secrets or access tokens. Health checks alone are not end-to-end validation.
+Also run the backend CI suite, frontend production build, and browser-based smoke tests against deployed URLs. Verify email-verified signup and final password setup, owner bootstrap/login, token refresh/logout, password-reset email delivery, tenant isolation with two companies, attachments, invoice issue/payment/refund/credit calculations, CSV exports, webhook delivery, and worker restart behavior. Verify CORS rejects unconfigured origins, HTTP redirects to HTTPS at the edge, backups can be restored, and logs contain no secrets or access tokens. Health checks alone are not end-to-end validation.
 
 ## 7. Abuse protection at the edge
 
