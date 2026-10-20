@@ -47,6 +47,10 @@ class WebhookEndpointCreate(BaseModel):
     def require_https(cls, value: HttpUrl) -> HttpUrl:
         if value.scheme != "https":
             raise ValueError("Webhook URL must use HTTPS")
+        if value.username or value.password:
+            raise ValueError("Webhook URL must not embed credentials")
+        if value.port not in (None, 443):
+            raise ValueError("Webhook URL must use the standard HTTPS port 443")
         return value
 
     @field_validator("events")
@@ -92,8 +96,13 @@ class WebhookEndpointUpdate(BaseModel):
     @field_validator("url")
     @classmethod
     def require_https(cls, value: HttpUrl | None) -> HttpUrl | None:
-        if value is not None and value.scheme != "https":
-            raise ValueError("Webhook URL must use HTTPS")
+        if value is not None:
+            if value.scheme != "https":
+                raise ValueError("Webhook URL must use HTTPS")
+            if value.username or value.password:
+                raise ValueError("Webhook URL must not embed credentials")
+            if value.port not in (None, 443):
+                raise ValueError("Webhook URL must use the standard HTTPS port 443")
         return value
 
     @field_validator("events")
