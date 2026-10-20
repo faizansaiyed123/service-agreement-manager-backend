@@ -13,6 +13,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.notification_crypto import decrypt_sensitive_message
 from app.db.session import SessionLocal
 from app.models import NotificationAttempt, NotificationOutbox
 
@@ -37,7 +38,10 @@ def send_smtp_notification(notification: NotificationOutbox) -> str:
     message["From"] = settings.smtp_from_email
     message["To"] = notification.recipient_email
     message["Message-ID"] = make_msgid()
-    message.set_content(notification.body)
+    body = notification.body
+    if notification.event_type == "auth.password_reset":
+        body = decrypt_sensitive_message(body, settings.notification_encryption_key)
+    message.set_content(body)
     with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=settings.smtp_timeout_seconds) as smtp:
         if settings.smtp_starttls:
             smtp.starttls(context=ssl.create_default_context())
