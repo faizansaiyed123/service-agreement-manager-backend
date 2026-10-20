@@ -121,6 +121,13 @@ jobs:
               else:
                   raise SystemExit(f"Production health check failed: {path} -> {status}")
 
+          for path in ("/docs", "/redoc", "/openapi.json"):
+              status, _, _ = request(path)
+              assert status == 404, f"Production documentation endpoint must be disabled: {path} -> {status}"
+          status, _, raw = request("/")
+          assert status == 200 and "docs" not in json.loads(raw), (status, raw)
+          print("Production interactive API docs and OpenAPI schema are disabled")
+
           origin = "https://app.example.com"
           status, headers, raw = request("/api/v1/auth/register", method="POST", headers={"Origin": origin}, body={
               "company_name": "Production Smoke HVAC",
