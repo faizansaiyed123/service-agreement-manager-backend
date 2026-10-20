@@ -196,6 +196,9 @@ def verify_email(payload: EmailVerificationConfirm, request: Request, response: 
     company = db.get(Company, user.company_id)
     if company is None or not company.is_active:
         raise DomainError(400, "invalid_email_verification", INVALID_VERIFICATION_MESSAGE)
+    # The registrant password is not trusted: someone might submit another person’s email.
+    # Require the mailbox owner to choose the final password through the single-use link.
+    user.password_hash = hash_password(payload.new_password)
     user.email_verified = True
     token.used_at = now
     other_tokens = db.scalars(select(EmailVerificationToken).where(
