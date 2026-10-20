@@ -40,7 +40,7 @@ def test_production_settings_require_secure_recovery_delivery():
     with pytest.raises(ValueError, match="recovery and verification URLs"):
         valid_production_settings(password_reset_url="http://app.example.com/reset-password").validate_production()
 
-    with pytest.raises(ValueError, match="PASSWORD_RESET_URL"):
+    with pytest.raises(ValueError, match="recovery and verification URLs"):
         valid_production_settings(password_reset_url="https://localhost/reset-password").validate_production()
 
     with pytest.raises(ValueError, match="SMTP_PASSWORD"):
