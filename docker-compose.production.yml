@@ -15,6 +15,19 @@ services:
       retries: 20
     # Intentionally not published to the host.
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env.production}
+    command: ["sh", "-c", "exec redis-server --save '' --appendonly no --maxmemory 64mb --maxmemory-policy noeviction --requirepass \"$REDIS_PASSWORD\""]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # Intentionally not published to the host; application containers use the private Compose network.
+
   api:
     build:
       context: .
@@ -24,12 +37,15 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://sam:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}@db:5432/service_agreements
       STORAGE_ROOT: /srv/app/storage
+      REDIS_URL: "redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env.production}@redis:6379/0"
     ports:
       - "127.0.0.1:${API_PORT:-8000}:8000"
     volumes:
       - attachments_data:/srv/app/storage
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     healthcheck:
@@ -47,6 +63,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://sam:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}@db:5432/service_agreements
       STORAGE_ROOT: /srv/app/storage
+      REDIS_URL: "redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env.production}@redis:6379/0"
     volumes:
       - attachments_data:/srv/app/storage
     depends_on:
@@ -63,6 +80,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://sam:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}@db:5432/service_agreements
       STORAGE_ROOT: /srv/app/storage
+      REDIS_URL: "redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env.production}@redis:6379/0"
     volumes:
       - attachments_data:/srv/app/storage
     depends_on:
@@ -79,6 +97,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://sam:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}@db:5432/service_agreements
       STORAGE_ROOT: /srv/app/storage
+      REDIS_URL: "redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env.production}@redis:6379/0"
     volumes:
       - attachments_data:/srv/app/storage
     depends_on:
@@ -95,6 +114,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://sam:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}@db:5432/service_agreements
       STORAGE_ROOT: /srv/app/storage
+      REDIS_URL: "redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env.production}@redis:6379/0"
     volumes:
       - attachments_data:/srv/app/storage
     depends_on:
@@ -111,6 +131,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://sam:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}@db:5432/service_agreements
       STORAGE_ROOT: /srv/app/storage
+      REDIS_URL: "redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env.production}@redis:6379/0"
     volumes:
       - attachments_data:/srv/app/storage
     depends_on:
