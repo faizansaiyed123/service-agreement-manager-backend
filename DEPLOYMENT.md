@@ -14,7 +14,42 @@ Generate independent cryptographically random values for JWT_SECRET_KEY (at leas
 
 Set CORS_ORIGINS to the exact public HTTPS app origin, without a trailing slash. It is also the server-side trusted Origin allowlist for cookie-session CSRF protection, so it must not be empty in production, even for the recommended same-origin proxy setup. Set COOKIE_SAMESITE=lax for same-origin or same-site deployments. Set PASSWORD_RESET_URL to the real frontend password-reset page. Configure working SMTP values: production startup intentionally fails if SMTP_HOST or SMTP_FROM_EMAIL is missing, or if STARTTLS is disabled.
 
-For file uploads, local storage is persisted in the named attachments_data volume and is suitable only when one app instance shares that volume. The HTTPS proxy must cap request bodies to slightly above the configured 25 MiB upload limit; the sample Caddy site uses a 30 MiB limit so oversized multipart requests are rejected before reaching FastAPI. Use the configured S3-compatible backend with HTTPS for horizontally scaled instances, and configure bucket access with a least-privilege identity. Arrange automated, encrypted backups and test restoration for the database and attachments before accepting real data.
+For file uploads, local storage is persisted in the named attachments_data volume and is suitable only when one app instance shares that volume. The HTTPS proxy must cap request bodies to slightly above the configured 25 MiB upload limit; the sample Caddy site uses a 30 MiB limit so oversized multipart requests are rejected before reaching FastAPI. Use the configured S3-compatible backend with HTTPS for horizontally scaled instances, and configure bucket access with a least-privilege identity.
+
+### Encrypted off-site database and attachment backups
+
+The repository includes [backup-production.sh](scripts/backup-production.sh) and [restore-production.sh](scripts/restore-production.sh), plus a daily systemd timer. The backup script briefly stops currently-running application writers so the PostgreSQL custom dump and local attachment archive represent the same point in time, packages a manifest/checksums, encrypts the archive using GnuPG AES-256, uploads it to a private S3 bucket, and retains a local rolling copy. Plan this scheduled pause for a low-traffic window. GPG and AWS CLI must be installed on the host.
+
+Create a root-owned backup environment file outside the repository; do not add these values to Git or paste them into chat:
+
+```sh
+sudo install -d -m 700 /etc/service-agreement-manager
+sudo install -m 600 /dev/null /etc/service-agreement-manager/backup.env
+sudoedit /etc/service-agreement-manager/backup.env
+```
+
+Set `ENV_FILE` and `COMPOSE_FILE` to the actual deployment paths, `BACKUP_DIRECTORY=/var/backups/service-agreement-manager`, an independent random `BACKUP_ENCRYPTION_KEY` of at least 32 characters, `BACKUP_S3_URI=s3://YOUR-PRIVATE-BUCKET/service-agreement-manager/`, `BACKUP_LOCAL_RETENTION_DAYS=14`, and an AWS region. Prefer a host instance role with only the necessary read/write permissions for this backup prefix; configure bucket versioning, retention, and access logging separately.
+
+Install and enable the timer (adjust the repository path if needed):
+
+```sh
+sudo cp systemd/service-agreement-manager-backup.service /etc/systemd/system/
+sudo cp systemd/service-agreement-manager-backup.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now service-agreement-manager-backup.timer
+sudo systemctl start service-agreement-manager-backup.service
+sudo systemctl status service-agreement-manager-backup.service
+```
+
+Do not consider backups ready until the first run uploaded an encrypted file and a restore has succeeded on a **separate staging environment**. Restores are destructive and require an explicit confirmation variable:
+
+```sh
+# Run from a secured admin shell after exporting the backup environment.
+export RESTORE_CONFIRMATION=I_UNDERSTAND_THIS_REPLACES_PRODUCTION_DATA
+bash scripts/restore-production.sh s3://YOUR-PRIVATE-BUCKET/service-agreement-manager/EXACT-BACKUP-FILENAME.tar.gz.gpg
+```
+
+The restore script verifies GPG integrity and the archived checksums, stops active application writers, restores the PostgreSQL dump and attachments, then restarts only the services that were running. Do not perform a production restore rehearsal on the live database.
 
 ## 3. Validate, build, and start
 
@@ -98,4 +133,4 @@ The application now applies Redis-backed shared sliding-window limits to login (
 
 ## 8. Operational essentials
 
-Monitor API and worker errors, database capacity and disk, queue retry/dead-letter growth, email delivery, and storage failures. Set backup retention and recovery-point/recovery-time targets, and keep a tested restore runbook. Rotate secrets with a planned rollout; rotate the webhook encryption key only with a migration/rotation plan for already encrypted webhook credentials. Keep a rollback image available, but understand that database migrations may not be reversible.
+Monitor API and worker errors, database capacity and disk, queue retry/dead-letter growth, email delivery, storage failures, Redis availability, and backup upload success. Define backup retention and recovery-point/recovery-time targets, alert on missed timer runs, and keep a tested restore runbook. Rotate secrets with a planned rollout; rotate the webhook encryption key only with a migration/rotation plan for already encrypted webhook credentials. Keep a rollback image available, but understand that database migrations may not be reversible.
