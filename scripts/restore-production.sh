@@ -13,7 +13,6 @@ COMPOSE_FILE="${COMPOSE_FILE:-$BACKEND_DIR/docker-compose.production.yml}"
 (( ${#BACKUP_ENCRYPTION_KEY} >= 32 )) || { echo "BACKUP_ENCRYPTION_KEY must be at least 32 characters" >&2; exit 1; }
 command -v docker >/dev/null
 command -v gpg >/dev/null
-command -v aws >/dev/null || { echo "AWS CLI is required even when restoring a local file" >&2; exit 1; }
 
 COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
 WORK_DIR="$(mktemp -d)"
@@ -40,6 +39,7 @@ trap cleanup EXIT
 SOURCE="$1"
 ENCRYPTED="$WORK_DIR/backup.tar.gz.gpg"
 if [[ "$SOURCE" == s3://* ]]; then
+  command -v aws >/dev/null || { echo "AWS CLI is required to restore from S3" >&2; exit 1; }
   aws s3 cp --only-show-errors "$SOURCE" "$ENCRYPTED"
 else
   [[ -f "$SOURCE" ]] || { echo "Backup file not found: $SOURCE" >&2; exit 1; }
