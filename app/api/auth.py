@@ -124,6 +124,9 @@ def register(payload: RegisterRequest, request: Request, response: Response, db:
         if not settings.allow_public_registration:
             raise DomainError(403, "registration_disabled", "Public registration is disabled. Ask your workspace administrator for access.")
         now = datetime.now(UTC)
+        # Perform the password hash even if the address is already registered to
+        # reduce a clear timing difference in public registration responses.
+        pending_password_hash = hash_password(payload.password)
         user = db.scalar(select(User).where(User.email == email).with_for_update())
         if user is None:
             company = Company(name=payload.company_name.strip())
@@ -133,7 +136,7 @@ def register(payload: RegisterRequest, request: Request, response: Response, db:
                 company_id=company.id,
                 email=email,
                 full_name=payload.full_name.strip(),
-                password_hash=hash_password(payload.password),
+                password_hash=pending_password_hash,
                 role="owner",
                 email_verified=False,
             )
