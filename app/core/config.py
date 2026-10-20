@@ -127,7 +127,7 @@ class Settings(BaseSettings):
             if self.smtp_username and not self.smtp_password:
                 raise ValueError("SMTP_PASSWORD is required when SMTP_USERNAME is configured")
             trusted_origins = {origin.lower() for origin in self.cors_origins}
-            for value_name, value in (("PASSWORD_RESET_URL", self.password_reset_url), ("EMAIL_VERIFICATION_URL", self.email_verification_url)):
+            for value in (self.password_reset_url, self.email_verification_url):
                 page = urlsplit(value)
                 origin = (page.scheme + "://" + page.netloc).lower()
                 invalid_local_host = not page.hostname or page.hostname.lower() in {"localhost", "127.0.0.1", "::1"} or page.hostname.lower().endswith(".localhost")
