@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from urllib.parse import parse_qs, urlsplit
 
 from conftest import TestingSession
@@ -7,6 +8,7 @@ from sqlalchemy import func, select
 from app.core.config import get_settings
 from app.core.notification_crypto import decrypt_sensitive_message
 from app.models import NotificationOutbox, PasswordResetToken
+from app.workers.notifications import send_smtp_notification
 
 
 def register(client, email):
@@ -142,3 +144,63 @@ def test_recovery_input_validation(client):
         "token": "x" * 43, "new_password": "short",
     })
     assert short_password.status_code == 422
+
+
+def test_reset_email_worker_decrypts_secret_only_when_sending(client, monkeypatch):
+    email = "recovery-mail-worker@example.com"
+    register(client, email)
+    assert request_reset(client, email).status_code == 202
+    token, notification_id = recover_token_from_outbox(email)
+
+    db = TestingSession()
+    try:
+        record = db.get(NotificationOutbox, notification_id)
+        assert record is not None
+        assert token not in record.body
+        encrypted_body = record.body
+        settings = get_settings()
+    finally:
+        db.close()
+
+    monkeypatch.setattr(
+        "app.workers.notifications.get_settings",
+        lambda: SimpleNamespace(
+            smtp_host="smtp.example.com",
+            smtp_from_email="no-reply@example.com",
+            smtp_username=None,
+            smtp_password=None,
+            smtp_starttls=True,
+            smtp_port=587,
+            smtp_timeout_seconds=5,
+            notification_encryption_key=settings.notification_encryption_key,
+        ),
+    )
+    delivered = []
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout):
+            assert host == "smtp.example.com"
+            assert port == 587
+            assert timeout == 5
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def starttls(self, context):
+            assert context is not None
+
+        def send_message(self, message):
+            delivered.append(message)
+            return {}
+
+    monkeypatch.setattr("app.workers.notifications.smtplib.SMTP", FakeSMTP)
+    record.body = encrypted_body
+    provider_id = send_smtp_notification(record)
+
+    assert provider_id
+    assert len(delivered) == 1
+    assert token in delivered[0].get_content()
+    assert "token=" in delivered[0].get_content()
