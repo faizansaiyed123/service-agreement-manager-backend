@@ -4,6 +4,8 @@ from urllib.parse import parse_qs, urlsplit
 from conftest import TestingSession
 from sqlalchemy import func, select
 
+from app.core.config import get_settings
+from app.core.notification_crypto import decrypt_sensitive_message
 from app.models import NotificationOutbox, PasswordResetToken
 
 
@@ -30,7 +32,9 @@ def recover_token_from_outbox(email):
             NotificationOutbox.recipient_email == email,
         ).order_by(NotificationOutbox.created_at.desc()))
         assert record is not None
-        url_line = next(line for line in record.body.splitlines() if line.startswith("http"))
+        assert "token=" not in record.body
+        plaintext = decrypt_sensitive_message(record.body, get_settings().notification_encryption_key)
+        url_line = next(line for line in plaintext.splitlines() if line.startswith("http"))
         values = parse_qs(urlsplit(url_line).fragment)
         return values["token"][0], record.id
     finally:
