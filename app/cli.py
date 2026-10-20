@@ -1,6 +1,7 @@
 import sys
 from getpass import getpass
 
+from pydantic import EmailStr, TypeAdapter, ValidationError
 from sqlalchemy import select
 
 from app.core.security import hash_password
@@ -15,8 +16,14 @@ def create_owner() -> int:
     company_name = input("Company/workspace name: ").strip()
     password = getpass("Owner password (minimum 12 characters): ")
     confirmation = getpass("Confirm owner password: ")
-    if not email or "@" not in email or not full_name or not company_name:
-        print("Email, name, and company are required.", file=sys.stderr)
+    try:
+        email = str(TypeAdapter(EmailStr).validate_python(email)).lower()
+    except ValidationError:
+        print("Enter a valid email address.", file=sys.stderr)
+        return 2
+    full_name, company_name = full_name.strip(), company_name.strip()
+    if not full_name or not company_name:
+        print("Name and company are required.", file=sys.stderr)
         return 2
     if len(password) < 12 or len(password) > 128:
         print("Password must contain between 12 and 128 characters.", file=sys.stderr)
