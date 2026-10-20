@@ -14,7 +14,7 @@ COMPOSE_FILE="${COMPOSE_FILE:-$BACKEND_DIR/docker-compose.production.yml}"
 command -v docker >/dev/null
 command -v gpg >/dev/null
 
-COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
+COMPOSE=(docker compose --profile sms --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
 WORK_DIR="$(mktemp -d)"
 APP_SERVICES=(api billing-worker webhook-worker maintenance-worker notification-worker sms-worker)
 mapfile -t RUNNING_SERVICES < <("${COMPOSE[@]}" ps --services --status running)
@@ -56,6 +56,14 @@ for required in database.dump attachments.tar.gz manifest.txt checksums.sha256; 
 done
 tar -xzf "$WORK_DIR/backup.tar.gz" -C "$WORK_DIR/extracted"
 (cd "$WORK_DIR/extracted" && sha256sum --check checksums.sha256)
+
+# Reject archive traversal before extracting attachment files into the persistent volume.
+mapfile -t ATTACHMENT_MEMBERS < <(tar -tzf "$WORK_DIR/extracted/attachments.tar.gz")
+for member in "${ATTACHMENT_MEMBERS[@]}"; do
+  case "$member" in
+    /*|..|../*|*/../*|*/..) echo "Unsafe attachment archive path: $member" >&2; exit 1 ;;
+  esac
+done
 
 echo "WARNING: this replaces the current production database and local attachments."
 echo "A separate current-state backup is strongly recommended before proceeding."
