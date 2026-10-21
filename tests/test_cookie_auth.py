@@ -31,7 +31,6 @@ def test_browser_auth_uses_httponly_cookies_without_exposing_tokens(client):
     assert "access_token" not in refreshed.json()
     assert "refresh_token" not in refreshed.json()
 
-    # Cookie-authenticated state changes require the trusted browser origin.
     assert client.post("/api/v1/auth/logout").status_code == 403
     assert client.post(
         "/api/v1/auth/logout",

@@ -39,7 +39,6 @@ def enforce_rate_limit(
         stored = _attempts.get(key)
         if stored is None:
             if len(_attempts) >= _MAX_TRACKED_BUCKETS:
-                # Bound memory when many unique network addresses/identifiers arrive.
                 for _ in range(min(_EVICT_BUCKETS, len(_attempts))):
                     _attempts.pop(next(iter(_attempts)))
             attempts: deque[float] = deque()

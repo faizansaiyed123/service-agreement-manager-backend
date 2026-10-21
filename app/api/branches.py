@@ -63,7 +63,6 @@ def duplicate_code(db: Session, company_id: UUID, code: str, excluding: UUID | N
 def promote_primary(db: Session, company_id: UUID, target: CompanyBranch) -> None:
     if not target.is_active:
         raise DomainError(422, "inactive_primary_branch", "An inactive branch cannot be the primary branch")
-    # Serialize primary-branch changes on the parent company row.
     db.scalar(select(Company).where(Company.id == company_id).with_for_update())
     primaries = db.scalars(select(CompanyBranch).where(
         CompanyBranch.company_id == company_id,
@@ -72,7 +71,6 @@ def promote_primary(db: Session, company_id: UUID, target: CompanyBranch) -> Non
     for current in primaries:
         if current.id != target.id:
             current.is_primary = False
-    # Free the partial unique index before the replacement is set true.
     db.flush()
     target.is_primary = True
 
@@ -97,14 +95,10 @@ def create_branch(
         CompanyBranch.is_primary.is_(True),
     )) is not None
     requested_primary = bool(values.pop("is_primary", False))
-    # Keep the partial unique index valid while inserting; primary promotion
-    # happens only after the new row exists.
     values["is_primary"] = not already_has_primary
     branch = CompanyBranch(company_id=user.company_id, **values)
     db.add(branch)
     db.flush()
-    # A new branch starts with all seven weekdays explicitly closed until its
-    # manager saves opening hours in the branch's local time zone.
     db.add_all([
         BranchBusinessHours(
             branch_id=branch.id,

@@ -12,7 +12,6 @@ USER app
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
-# The default build remains developer-friendly for the existing docker-compose.yml.
 FROM runtime AS development
 USER root
 COPY tests ./tests

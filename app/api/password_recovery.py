@@ -86,8 +86,6 @@ def request_password_recovery(
     db.add(reset_token)
     db.flush()
 
-    # Keep the single-use reset secret in the fragment: browsers do not send URL fragments
-    # in HTTP requests, so it is not exposed to web-server/proxy access logs or Referer headers.
     reset_base = settings.password_reset_url.split("#", 1)[0]
     reset_url = f"{reset_base}#{urlencode({'token': raw_token})}"
     subject = "Reset your Service Agreement Manager password"
@@ -145,8 +143,6 @@ def complete_password_recovery(
     if token_hint is None:
         raise DomainError(400, "invalid_reset_token", INVALID_TOKEN_MESSAGE)
 
-    # Lock in a consistent order (user, then reset token, then sessions) to
-    # serialize concurrent recovery requests and avoid lock-order deadlocks.
     user = db.scalar(
         select(User)
         .where(User.id == token_hint.user_id)

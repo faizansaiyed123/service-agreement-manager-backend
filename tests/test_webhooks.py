@@ -47,7 +47,7 @@ def test_webhook_endpoint_crud_secret_rotation_and_https_validation(client):
     assert listed.json()[0]["url"] == "https://example.com/webhook"
     assert "secret" not in listed.json()[0]
 
-    settings_key = client.get("/api/v1/webhooks", headers=headers).headers  # proves protected route works
+    settings_key = client.get("/api/v1/webhooks", headers=headers).headers  
     assert settings_key is not None
 
     rotated = client.post(

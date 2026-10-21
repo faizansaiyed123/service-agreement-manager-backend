@@ -349,7 +349,6 @@ def record_payment(
         response.status_code = 200
         return existing
     invoice = get_invoice(db, user.company_id, invoice_id, lock=True)
-    # Re-check after acquiring the invoice lock; retries for the same invoice are serialized in PostgreSQL.
     existing = replay_payment(db, user.company_id, invoice_id, idempotency_key, fingerprint)
     if existing is not None:
         response.status_code = 200

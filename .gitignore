@@ -12,7 +12,6 @@ htmlcov/
 dist/
 build/
 
-# Production secrets and runtime state
 .env.production
 .env.production.*
 !.env.production.example

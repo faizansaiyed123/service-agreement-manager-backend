@@ -48,8 +48,6 @@ def browser_or_api_session(
     response: Response,
     pair: TokenPair,
 ) -> TokenPair | AuthenticatedSession:
-    # Browser requests always carry Origin. Never return bearer tokens to JavaScript.
-    # Non-browser API clients without Origin retain the explicit bearer-token flow.
     if request.headers.get("origin"):
         set_auth_cookies(response, pair.access_token, pair.refresh_token)
         return AuthenticatedSession(expires_in=pair.expires_in)
@@ -125,8 +123,6 @@ def register(payload: RegisterRequest, request: Request, response: Response, db:
         if not settings.allow_public_registration:
             raise DomainError(403, "registration_disabled", "Public registration is disabled. Ask your workspace administrator for access.")
         now = datetime.now(UTC)
-        # Perform the password hash even if the address is already registered to
-        # reduce a clear timing difference in public registration responses.
         pending_password_hash = hash_password(payload.password)
         user = db.scalar(select(User).where(User.email == email).with_for_update())
         if user is None:
@@ -157,7 +153,6 @@ def register(payload: RegisterRequest, request: Request, response: Response, db:
             db.commit()
         except IntegrityError:
             db.rollback()
-            # Do not disclose whether another account registered the same email.
         return RegistrationPending(message=REGISTRATION_MESSAGE)
 
     if db.scalar(select(User.id).where(User.email == email)) is not None:
@@ -200,8 +195,6 @@ def verify_email(payload: EmailVerificationConfirm, request: Request, response: 
     company = db.get(Company, user.company_id)
     if company is None or not company.is_active:
         raise DomainError(400, "invalid_email_verification", INVALID_VERIFICATION_MESSAGE)
-    # The registrant password is not trusted: someone might submit another person’s email.
-    # Require the mailbox owner to choose the final password through the single-use link.
     user.password_hash = hash_password(payload.new_password)
     user.email_verified = True
     token.used_at = now

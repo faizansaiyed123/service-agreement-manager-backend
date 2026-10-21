@@ -13,8 +13,6 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
-    # Intentionally not published to the host.
-
   api:
     build:
       context: .

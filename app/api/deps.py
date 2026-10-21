@@ -23,8 +23,6 @@ def get_current_user(
     cookie_token = request.cookies.get(ACCESS_COOKIE)
     browser_request = bool(request.headers.get("origin") or request.headers.get("sec-fetch-site"))
     if browser_request:
-        # Do not accept bearer tokens from browsers: older localStorage sessions must not
-        # remain a way to authenticate after the HttpOnly-cookie migration.
         token = cookie_token
     else:
         token = credentials.credentials if credentials is not None else cookie_token

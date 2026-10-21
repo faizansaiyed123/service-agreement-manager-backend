@@ -78,7 +78,6 @@ def test_signup_requires_mailbox_owner_to_choose_final_password(client, monkeypa
     )
     assert replay.status_code == 400
 
-    # The password selected before ownership proof must not work after verification.
     original_password = client.post("/api/v1/auth/login", headers={"Origin": origin}, json={
         "email": email, "password": registration_password,
     })
@@ -93,7 +92,6 @@ def test_signup_requires_mailbox_owner_to_choose_final_password(client, monkeypa
     assert "refresh_token" not in login.json()
     assert any("HttpOnly" in value for value in login.headers.get_list("set-cookie"))
 
-    # Other users in the tenant must not be able to inspect the queued secret link.
     protected_notification = client.get(f"/api/v1/notifications/{notification_id}", headers={"Origin": origin})
     assert protected_notification.status_code == 404
     protected_attempts = client.get(f"/api/v1/notifications/{notification_id}/attempts", headers={"Origin": origin})
