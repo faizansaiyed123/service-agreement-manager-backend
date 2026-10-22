@@ -2,6 +2,8 @@
 
 Backend API for HVAC, plumbing and related-trade service businesses.
 
+Product experience: [open the Service Agreement Manager visual walkthrough](https://github.com/faizansaiyed123/service-agreement-manager-frontend/blob/main/visual.md) to see the integrated customer, agreement, service operations, billing and reporting journey from the user's perspective.
+
 ## Stack
 - Python 3.12, FastAPI and Pydantic v2
 - SQLAlchemy 2.x, PostgreSQL and Alembic
