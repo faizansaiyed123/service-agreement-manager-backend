@@ -6,8 +6,8 @@ from app.core.config import Settings
 def valid_production_settings(**overrides) -> Settings:
     values = {
         "app_env": "production",
-        "database_url": "postgresql+psycopg://sam:unique-ci-database-password-long-enough-123456@db:5432/service_agreements",
-        "postgres_password": "unique-ci-database-password-long-enough-123456",
+        "database_url": "postgresql+psycopg://sam:uniqueCiDatabasePasswordLongEnough123456@db:5432/service_agreements",
+        "postgres_password": "uniqueCiDatabasePasswordLongEnough123456",
         "debug": False,
         "allow_public_registration": True,
         "cors_origins": ["https://app.example.com"],
@@ -54,16 +54,16 @@ def test_production_settings_require_strong_database_credentials_and_tls():
 
     with pytest.raises(ValueError, match="localhost"):
         valid_production_settings(
-            database_url="postgresql+psycopg://sam:unique-ci-database-password-long-enough-123456@localhost:5432/service_agreements"
+            database_url="postgresql+psycopg://sam:uniqueCiDatabasePasswordLongEnough123456@localhost:5432/service_agreements"
         ).validate_production()
 
     with pytest.raises(ValueError, match="sslmode"):
         valid_production_settings(
-            database_url="postgresql+psycopg://sam:unique-ci-database-password-long-enough-123456@db.example.com:5432/service_agreements"
+            database_url="postgresql+psycopg://sam:uniqueCiDatabasePasswordLongEnough123456@db.example.com:5432/service_agreements"
         ).validate_production()
 
     valid_production_settings(
-        database_url="postgresql+psycopg://sam:unique-ci-database-password-long-enough-123456@db.example.com:5432/service_agreements?sslmode=verify-full"
+        database_url="postgresql+psycopg://sam:uniqueCiDatabasePasswordLongEnough123456@db.example.com:5432/service_agreements?sslmode=verify-full"
     ).validate_production()
 
 
