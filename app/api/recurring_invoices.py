@@ -9,7 +9,7 @@ from app.api.deps import get_current_user, require_roles
 from app.core.errors import DomainError
 from app.db.session import get_db
 from app.models import Agreement, Company, Customer, RecurringInvoiceSchedule, ServiceLocation, User
-from app.recurring_schemas import RecurringInvoiceCreate, RecurringInvoiceRead, RecurringInvoiceUpdate
+from app.schemas.recurring import RecurringInvoiceCreate, RecurringInvoiceRead, RecurringInvoiceUpdate
 
 router = APIRouter(prefix="/recurring-invoices", tags=["recurring-invoices"])
 ROLES = ("owner", "admin", "manager", "billing")

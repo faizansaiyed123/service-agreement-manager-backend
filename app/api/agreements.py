@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.agreement_schemas import AcceptanceEvidence, AgreementCreate, AgreementEventRead, AgreementLineInput, AgreementRead, AgreementUpdate, AgreementVersionRead, ReasonRequest
+from app.schemas.agreement import AcceptanceEvidence, AgreementCreate, AgreementEventRead, AgreementLineInput, AgreementRead, AgreementUpdate, AgreementVersionRead, ReasonRequest
 from app.api.deps import get_current_user, require_roles
 from app.core.errors import DomainError
 from app.webhook_service import publish_webhook_event

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_roles
 from app.core.errors import DomainError
-from app.customer_import_schemas import (
+from app.schemas.customer_imports import (
     CustomerImportDetail,
     CustomerImportPreview,
     CustomerImportPreviewRow,

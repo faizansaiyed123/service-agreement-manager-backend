@@ -19,9 +19,9 @@ from app.core.rate_limit import enforce_rate_limit
 from app.core.security import create_token, decode_token, hash_password, verify_password
 from app.db.session import get_db
 from app.models import AuthSession, Company, EmailVerificationToken, NotificationOutbox, PasswordResetToken, User
-from app.schemas import AuthenticatedSession, LoginRequest, RefreshRequest, RegisterRequest, TokenPair, UserRead
-from app.user_schemas import PasswordChange
-from app.email_verification_schemas import EmailVerificationConfirm, EmailVerificationRequest, RegistrationPending
+from app.schemas.common import AuthenticatedSession, LoginRequest, RefreshRequest, RegisterRequest, TokenPair, UserRead
+from app.schemas.users import PasswordChange
+from app.schemas.email_verification import EmailVerificationConfirm, EmailVerificationRequest, RegistrationPending
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 _DUMMY_PASSWORD_HASH = hash_password(secrets.token_urlsafe(32))

@@ -13,7 +13,7 @@ from app.core.config import get_settings
 from app.core.errors import DomainError
 from app.db.session import get_db
 from app.models import NotificationAttempt, NotificationOutbox, User
-from app.notification_schemas import NotificationAttemptRead, NotificationCreate, NotificationRead
+from app.schemas.notifications import NotificationAttemptRead, NotificationCreate, NotificationRead
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 MANAGER_ROLES = ("owner", "admin", "manager", "staff")

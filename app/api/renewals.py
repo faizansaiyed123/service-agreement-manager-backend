@@ -10,7 +10,7 @@ from app.api.deps import get_current_user, require_roles
 from app.core.errors import DomainError
 from app.db.session import get_db
 from app.models import Agreement, AgreementEvent, AgreementLine, AgreementRenewal, AgreementVersion, Company, User
-from app.renewal_schemas import AgreementRead, RenewalAcceptance, RenewalDecline, RenewalOfferCreate, RenewalOfferRead
+from app.schemas.renewals import AgreementRead, RenewalAcceptance, RenewalDecline, RenewalOfferCreate, RenewalOfferRead
 
 router = APIRouter(prefix="/agreements/{agreement_id}/renewals", tags=["agreement renewals"])
 CENT = Decimal("0.01")

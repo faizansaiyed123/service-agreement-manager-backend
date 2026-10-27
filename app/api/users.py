@@ -10,8 +10,8 @@ from app.core.errors import DomainError
 from app.core.security import hash_password
 from app.db.session import get_db
 from app.models import AuthSession, PasswordResetToken, User
-from app.schemas import UserRead
-from app.user_schemas import PasswordReset, UserCreate, UserUpdate
+from app.schemas.common import UserRead
+from app.schemas.users import PasswordReset, UserCreate, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
 

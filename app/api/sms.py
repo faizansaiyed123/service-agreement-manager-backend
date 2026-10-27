@@ -12,7 +12,7 @@ from app.core.config import get_settings
 from app.core.errors import DomainError
 from app.db.session import get_db
 from app.models import SmsOutbox, User
-from app.sms_schemas import SmsCreate, SmsRead
+from app.schemas.sms import SmsCreate, SmsRead
 
 router = APIRouter(prefix="/sms", tags=["sms"])
 ROLES = ("owner", "admin", "manager", "staff")
