@@ -3,7 +3,7 @@ from functools import lru_cache
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
@@ -15,11 +15,13 @@ class Settings(BaseSettings):
     debug: bool = False
     api_v1_prefix: str = "/api/v1"
     database_url: str = "postgresql+psycopg://sam:sam_dev_only@localhost:5432/service_agreements"
+    postgres_password: SecretStr | None = None
     jwt_secret_key: str = "unsafe-development-secret-change-this-please"
     access_token_minutes: int = 15
     refresh_token_days: int = 14
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:3000", "http://localhost:5173"]
     cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+    allow_public_registration: bool = True
     redis_url: str | None = None
     log_level: str = "INFO"
     smtp_host: str | None = None
@@ -35,6 +37,9 @@ class Settings(BaseSettings):
     password_reset_token_minutes: int = Field(default=30, ge=1, le=1440)
     password_reset_cooldown_seconds: int = Field(default=60, ge=0, le=86400)
     password_reset_url: str = "http://localhost:3000/reset-password"
+    email_verification_token_minutes: int = Field(default=60, ge=5, le=1440)
+    email_verification_cooldown_seconds: int = Field(default=60, ge=0, le=86400)
+    email_verification_url: str = "http://localhost:3000/verify-email"
     storage_backend: str = "local"
     storage_root: str = "./storage"
     storage_max_file_bytes: int = Field(default=25 * 1024 * 1024, ge=1, le=500 * 1024 * 1024)
@@ -101,7 +106,19 @@ class Settings(BaseSettings):
                 raise ValueError("Production DATABASE_URL must use PostgreSQL credentials with a non-placeholder password of at least 32 characters")
             if database_host in {"localhost", "127.0.0.1", "::1"} or database_host.endswith(".localhost"):
                 raise ValueError("Production DATABASE_URL cannot point to localhost")
-            if database_host != "db" and not database_host.endswith(".internal"):
+            if database_host == "db":
+                compose_password = self.postgres_password.get_secret_value() if self.postgres_password else ""
+                if (
+                    len(compose_password) < 32
+                    or not compose_password.isalnum()
+                    or self._is_secret_placeholder(compose_password)
+                    or database_password != compose_password
+                    or compose_password in {self.jwt_secret_key, self.webhook_encryption_key, self.notification_encryption_key}
+                ):
+                    raise ValueError(
+                        "Production Compose requires a unique POSTGRES_PASSWORD of at least 32 URL-safe alphanumeric characters matching DATABASE_URL"
+                    )
+            elif not database_host.endswith(".internal"):
                 database_options = dict(item.split("=", 1) for item in database.query.split("&") if "=" in item)
                 if database_options.get("sslmode") not in {"require", "verify-ca", "verify-full"}:
                     raise ValueError("Production external PostgreSQL connections must use sslmode=require or stronger")
@@ -159,18 +176,13 @@ class Settings(BaseSettings):
                 raise ValueError("SMTP_STARTTLS must be enabled in production")
             if self.smtp_username and not self.smtp_password:
                 raise ValueError("SMTP_PASSWORD is required when SMTP_USERNAME is configured")
-            reset_url = urlsplit(self.password_reset_url)
-            if (
-                reset_url.scheme != "https"
-                or not reset_url.hostname
-                or reset_url.hostname.lower() in {"localhost", "127.0.0.1", "::1"}
-                or reset_url.hostname.lower().endswith(".localhost")
-                or reset_url.username
-                or reset_url.password
-                or reset_url.query
-                or reset_url.fragment
-            ):
-                raise ValueError("Production PASSWORD_RESET_URL must be a non-local HTTPS page URL without query or fragment")
+            trusted_origins = {origin.lower() for origin in self.cors_origins}
+            for value in (self.password_reset_url, self.email_verification_url):
+                page = urlsplit(value)
+                origin = (page.scheme + "://" + page.netloc).lower()
+                invalid_local_host = not page.hostname or page.hostname.lower() in {"localhost", "127.0.0.1", "::1"} or page.hostname.lower().endswith(".localhost")
+                if page.scheme != "https" or page.username or page.password or invalid_local_host or page.query or page.fragment or origin not in trusted_origins:
+                    raise ValueError("Production recovery and verification URLs must use HTTPS on a trusted CORS_ORIGINS host and have no query or fragment")
 
 
 @lru_cache

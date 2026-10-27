@@ -13,7 +13,6 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
-    # Intentionally not published to the host.
 
   redis:
     image: redis:7-alpine

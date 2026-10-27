@@ -63,7 +63,6 @@ def test_recovery_response_is_generic_and_reset_invalidates_all_sessions(client)
 
     token, notification_id = recover_token_from_outbox(email)
     assert token not in requested.text
-    # Cooldown suppresses duplicate messages without changing the public response.
     duplicate = request_reset(client, email)
     assert duplicate.status_code == 202
     assert duplicate.json() == requested.json()
@@ -76,8 +75,6 @@ def test_recovery_response_is_generic_and_reset_invalidates_all_sessions(client)
     finally:
         db.close()
 
-    # Outbox reads must never reveal the secret reset URL, even to another user
-    # in the same company who can otherwise read ordinary notification records.
     assert client.get("/api/v1/notifications?event_type=auth.password_reset", headers=first_headers).json() == []
     assert client.get(f"/api/v1/notifications/{notification_id}", headers=first_headers).status_code == 404
     assert client.get(f"/api/v1/notifications/{notification_id}/attempts", headers=first_headers).status_code == 404

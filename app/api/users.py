@@ -9,9 +9,9 @@ from app.api.deps import require_roles
 from app.core.errors import DomainError
 from app.core.security import hash_password
 from app.db.session import get_db
-from app.models import AuthSession, User
-from app.schemas import UserRead
-from app.user_schemas import PasswordReset, UserCreate, UserUpdate
+from app.models import AuthSession, PasswordResetToken, User
+from app.schemas.common import UserRead
+from app.schemas.users import PasswordReset, UserCreate, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -111,10 +111,17 @@ def reset_password(
     if actor.role != "owner" and target.role in {"owner", "admin"}:
         raise DomainError(403, "role_assignment_forbidden", "Only an owner can reset an owner/admin password")
     target.password_hash = hash_password(payload.new_password)
+    now = datetime.now(UTC)
+    for token in db.scalars(select(PasswordResetToken).where(
+        PasswordResetToken.user_id == target.id,
+        PasswordResetToken.used_at.is_(None),
+        PasswordResetToken.revoked_at.is_(None),
+    ).with_for_update()).all():
+        token.revoked_at = now
     for session in db.scalars(select(AuthSession).where(
         AuthSession.user_id == target.id, AuthSession.revoked_at.is_(None)
-    )).all():
-        session.revoked_at = datetime.now(UTC)
+    ).with_for_update()).all():
+        session.revoked_at = now
     db.commit()
     db.refresh(target)
     return target

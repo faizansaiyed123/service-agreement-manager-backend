@@ -12,7 +12,7 @@ Copy .env.production.example to .env.production and replace every placeholder be
 
 Generate independent cryptographically random values for JWT_SECRET_KEY (at least 48 characters), WEBHOOK_ENCRYPTION_KEY (at least 32 characters), NOTIFICATION_ENCRYPTION_KEY (at least 32 characters), POSTGRES_PASSWORD, and REDIS_PASSWORD. Keep database/Redis passwords URL-safe alphanumeric because Compose inserts them into service URLs. Do not commit .env.production. Keep secrets in an approved secrets manager; do not paste them into tickets or chat. Production Compose runs Redis on the private container network with password authentication and no published host port; the API fails closed for protected auth flows if the shared limiter is unavailable. Password-reset URLs are encrypted in the email outbox using the separate NOTIFICATION_ENCRYPTION_KEY and decrypted only by the email worker.
 
-Set CORS_ORIGINS to the exact public HTTPS app origin, without a trailing slash. It is also the server-side trusted Origin allowlist for cookie-session CSRF protection, so it must not be empty in production, even for the recommended same-origin proxy setup. Set COOKIE_SAMESITE=lax for same-origin or same-site deployments. Set PASSWORD_RESET_URL to the real frontend password-reset page. Configure working SMTP values: production startup intentionally fails if SMTP_HOST or SMTP_FROM_EMAIL is missing, or if STARTTLS is disabled.
+Set CORS_ORIGINS to the exact public HTTPS app origin, without a trailing slash. It is also the server-side trusted Origin allowlist for cookie-session CSRF protection, so it must not be empty in production, even for the recommended same-origin proxy setup. Set COOKIE_SAMESITE=lax for same-origin or same-site deployments. Set PASSWORD_RESET_URL and EMAIL_VERIFICATION_URL to real frontend pages on that same HTTPS origin. Keep ALLOW_PUBLIC_REGISTRATION=true only if email verification and delivery are ready; signup remains pending until the recipient opens the single-use link and sets their own final password. Configure working SMTP values: production startup intentionally fails if SMTP_HOST or SMTP_FROM_EMAIL is missing, or if STARTTLS is disabled.
 
 For file uploads, local storage is persisted in the named attachments_data volume and is suitable only when one app instance shares that volume. The HTTPS proxy must cap request bodies to slightly above the configured 25 MiB upload limit; the sample Caddy site uses a 30 MiB limit so oversized multipart requests are rejected before reaching FastAPI. Use the configured S3-compatible backend with HTTPS for horizontally scaled instances, and configure bucket access with a least-privilege identity.
 
@@ -64,7 +64,17 @@ docker compose --env-file .env.production -f docker-compose.production.yml ps
 docker compose --env-file .env.production -f docker-compose.production.yml logs --tail=200 api
 ```
 
-The API container applies Alembic migrations before starting. This Compose file is intended for a single API instance; do not scale API replicas that run migrations on startup. For a multi-instance deployment, run migrations once as a release step and use a managed database or carefully designed shared storage. Keep database upgrades and application releases coordinated, and take a backup before migrations.
+The API container applies Alembic migrations before starting. In the production registration flow, a new workspace owner must verify control of the submitted email and choose the final password through the single-use link. Confirm the delivery worker is running and SMTP is configured before enabling public signup. For a private beta, set `ALLOW_PUBLIC_REGISTRATION=false` and build the frontend with `--build-arg VITE_PUBLIC_REGISTRATION=false`.
+
+An operator can alternatively bootstrap a trusted first owner after the API is healthy:
+
+```sh
+docker compose --env-file .env.production -f docker-compose.production.yml exec api python -m app.cli create-owner
+```
+
+Use an email address you control and enter the password at the hidden prompt; do not put it on the command line.
+
+This Compose file is intended for a single API instance; do not scale API replicas that run migrations on startup. For a multi-instance deployment, run migrations once as a release step and use a managed database or carefully designed shared storage. Keep database upgrades and application releases coordinated, and take a backup before migrations.
 
 The production stack starts authenticated Redis for shared sliding-window authentication limits, in addition to PostgreSQL and the API. Redis has no public port and does not persist rate-limit counters. The standard workers for billing, webhooks, maintenance, and account notifications are started with this configuration. SMS delivery is optional. Configure SMS_PROVIDER=http and its HTTPS credentials in .env.production, then start the SMS profile:
 
@@ -125,7 +135,7 @@ curl --fail http://127.0.0.1:8000/health/ready
 docker compose --env-file .env.production -f docker-compose.production.yml ps
 ```
 
-Also run the backend CI suite, frontend production build, and browser-based smoke tests against deployed URLs. Verify registration/login, token refresh/logout, password-reset email delivery, tenant isolation with two companies, attachments, invoice issue/payment/refund/credit calculations, CSV exports, webhook delivery, and worker restart behavior. Verify CORS rejects unconfigured origins, HTTP redirects to HTTPS at the edge, backups can be restored, and logs contain no secrets or access tokens. Health checks alone are not end-to-end validation.
+Also run the backend CI suite, frontend production build, and browser-based smoke tests against deployed URLs. Verify email-verified signup and final password setup, owner bootstrap/login, token refresh/logout, password-reset email delivery, tenant isolation with two companies, attachments, invoice issue/payment/refund/credit calculations, CSV exports, webhook delivery, and worker restart behavior. Verify CORS rejects unconfigured origins, HTTP redirects to HTTPS at the edge, backups can be restored, and logs contain no secrets or access tokens. Health checks alone are not end-to-end validation.
 
 ## 7. Abuse protection at the edge
 

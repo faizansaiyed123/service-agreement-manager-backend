@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.billing_schemas import InvoiceLineInput
+from app.schemas.billing import InvoiceLineInput
 
 
 class RecurringInvoiceCreate(BaseModel):

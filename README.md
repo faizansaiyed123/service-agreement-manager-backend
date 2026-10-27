@@ -2,6 +2,8 @@
 
 Backend API for HVAC, plumbing and related-trade service businesses.
 
+Product experience: [open the Service Agreement Manager visual walkthrough](https://github.com/faizansaiyed123/service-agreement-manager-frontend/blob/main/visual.md) to see the integrated customer, agreement, service operations, billing and reporting journey from the user's perspective.
+
 ## Stack
 - Python 3.12, FastAPI and Pydantic v2
 - SQLAlchemy 2.x, PostgreSQL and Alembic
@@ -58,7 +60,7 @@ Real SMTP/SMS/S3 provider delivery, production deployment, TLS/proxy setup, secr
 
 ## Browser session security
 
-Browser login and registration return no bearer tokens in JSON. The API sets short-lived access and refresh tokens in `HttpOnly` cookies, validates exact trusted origins on browser requests, and applies CSRF checks to cookie-authenticated state changes. Browser clients must use cookies; bearer tokens remain supported for non-browser API clients. Authentication endpoints use shared Redis-backed rate limits in production and in-memory limits in development/tests. Production authentication fails closed if Redis is unavailable; provider WAF limits remain required.
+Browser login and registration return no bearer tokens in JSON. The API sets short-lived access and refresh tokens in `HttpOnly` cookies, validates exact trusted origins on browser requests, and applies CSRF checks to cookie-authenticated state changes. Browser clients must use cookies; bearer tokens remain supported for non-browser API clients. Authentication endpoints use shared Redis-backed rate limits in production and in-memory limits in development/tests. Production authentication fails closed if Redis is unavailable; provider WAF limits remain required. Production registration requires a single-use email verification link; the mailbox owner sets the final password after opening that link. Set `ALLOW_PUBLIC_REGISTRATION=false` for a private beta, and use `python -m app.cli create-owner` to bootstrap the first trusted owner.
 
 ## Production deployment
 

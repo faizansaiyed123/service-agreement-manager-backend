@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_user, require_roles
-from app.billing_schemas import InvoiceBaseRead, InvoiceCreate, InvoiceCreditCreate, InvoiceCreditRead, InvoiceEventRead, InvoiceLineInput, InvoiceRead, InvoiceUpdate, PaymentCreate, PaymentRead, PaymentRefundCreate, PaymentRefundRead, VoidInvoice
+from app.schemas.billing import InvoiceBaseRead, InvoiceCreate, InvoiceCreditCreate, InvoiceCreditRead, InvoiceEventRead, InvoiceLineInput, InvoiceRead, InvoiceUpdate, PaymentCreate, PaymentRead, PaymentRefundCreate, PaymentRefundRead, VoidInvoice
 from app.core.errors import DomainError
 from app.db.session import get_db
 from app.webhook_service import publish_webhook_event
@@ -349,7 +349,6 @@ def record_payment(
         response.status_code = 200
         return existing
     invoice = get_invoice(db, user.company_id, invoice_id, lock=True)
-    # Re-check after acquiring the invoice lock; retries for the same invoice are serialized in PostgreSQL.
     existing = replay_payment(db, user.company_id, invoice_id, idempotency_key, fingerprint)
     if existing is not None:
         response.status_code = 200

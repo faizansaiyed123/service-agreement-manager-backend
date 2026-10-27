@@ -66,6 +66,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Default branches may have gained business data after this migration.
-    # Preserve them rather than destructively deleting customer-facing branches.
     pass

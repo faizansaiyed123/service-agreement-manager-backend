@@ -9,7 +9,7 @@ from app.core.errors import DomainError
 from app.db.session import get_db
 from app.webhook_service import publish_webhook_event
 from app.models import Contact, Customer, ServiceLocation, User, Company
-from app.schemas import ContactCreate, ContactRead, CustomerCreate, CustomerRead, CustomerUpdate, ServiceLocationCreate, ServiceLocationRead
+from app.schemas.common import ContactCreate, ContactRead, CustomerCreate, CustomerRead, CustomerUpdate, ServiceLocationCreate, ServiceLocationRead
 
 router = APIRouter(prefix="/customers", tags=["customers"])
 

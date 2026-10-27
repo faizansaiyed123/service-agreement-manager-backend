@@ -7,7 +7,9 @@ def valid_production_settings(**overrides) -> Settings:
     values = {
         "app_env": "production",
         "database_url": "postgresql+psycopg://sam:unique-ci-database-password-long-enough-123456@db:5432/service_agreements",
+        "postgres_password": "unique-ci-database-password-long-enough-123456",
         "debug": False,
+        "allow_public_registration": True,
         "cors_origins": ["https://app.example.com"],
         "jwt_secret_key": "production-secret-value-that-is-longer-than-forty-eight-characters",
         "redis_url": "redis://:unique-ci-redis-password-at-least-32-chars-123456@redis:6379/0",
@@ -15,11 +17,22 @@ def valid_production_settings(**overrides) -> Settings:
         "smtp_from_email": "no-reply@example.com",
         "smtp_starttls": True,
         "password_reset_url": "https://app.example.com/reset-password",
+        "email_verification_url": "https://app.example.com/verify-email",
         "webhook_encryption_key": "production-webhook-secret-value-that-is-at-least-32-chars",
         "notification_encryption_key": "production-notification-secret-value-over-32-characters",
     }
     values.update(overrides)
     return Settings(**values)
+
+
+def test_production_settings_allow_signup_when_verification_is_configured():
+    valid_production_settings(allow_public_registration=True).validate_production()
+
+    with pytest.raises(ValueError, match="recovery and verification URLs"):
+        valid_production_settings(email_verification_url="http://app.example.com/verify-email").validate_production()
+
+    with pytest.raises(ValueError, match="recovery and verification URLs"):
+        valid_production_settings(email_verification_url="https://untrusted.example/verify-email").validate_production()
 
 
 def test_production_settings_require_authenticated_private_or_tls_redis():
@@ -60,10 +73,10 @@ def test_production_settings_require_secure_recovery_delivery():
     with pytest.raises(ValueError, match="SMTP_HOST and SMTP_FROM_EMAIL"):
         valid_production_settings(smtp_host=None, smtp_from_email=None).validate_production()
 
-    with pytest.raises(ValueError, match="PASSWORD_RESET_URL"):
+    with pytest.raises(ValueError, match="recovery and verification URLs"):
         valid_production_settings(password_reset_url="http://app.example.com/reset-password").validate_production()
 
-    with pytest.raises(ValueError, match="PASSWORD_RESET_URL"):
+    with pytest.raises(ValueError, match="recovery and verification URLs"):
         valid_production_settings(password_reset_url="https://localhost/reset-password").validate_production()
 
     with pytest.raises(ValueError, match="SMTP_PASSWORD"):
@@ -121,6 +134,23 @@ def test_production_settings_require_secure_external_endpoints():
         ).validate_production()
 
 
+
+def test_production_compose_requires_a_strong_matching_database_password():
+    password = "A9" * 32
+    database_url = f"postgresql+psycopg://sam:{password}@db:5432/service_agreements"
+    valid_production_settings(database_url=database_url, postgres_password=password).validate_production()
+
+    with pytest.raises(ValueError, match="POSTGRES_PASSWORD"):
+        valid_production_settings(
+            database_url=database_url,
+            postgres_password="B8" * 32,
+        ).validate_production()
+
+    with pytest.raises(ValueError, match="POSTGRES_PASSWORD"):
+        valid_production_settings(
+            database_url="postgresql+psycopg://sam:REPLACE_WITH_URL_SAFE_RANDOM_PASSWORD@db:5432/service_agreements",
+            postgres_password="REPLACE_WITH_URL_SAFE_RANDOM_PASSWORD",
+        ).validate_production()
 
 def test_production_settings_reject_secret_placeholders():
     with pytest.raises(ValueError, match="JWT_SECRET_KEY"):

@@ -10,7 +10,7 @@ from app.api.billing import invoice_adjustments
 from app.core.errors import DomainError
 from app.db.session import get_db
 from app.models import Agreement, Company, Invoice, User, WorkOrder
-from app.report_schemas import AgreementSummaryRead, BillingReceivablesRead, TechnicianWorkloadRead, WorkOrderReportRead
+from app.schemas.reports import AgreementSummaryRead, BillingReceivablesRead, TechnicianWorkloadRead, WorkOrderReportRead
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 

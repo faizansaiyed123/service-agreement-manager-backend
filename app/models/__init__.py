@@ -7,6 +7,7 @@ from app.models.billing import Invoice, InvoiceCredit, InvoiceEvent, InvoiceLine
 from app.models.branches import BranchBusinessHours, BranchClosure, CompanyBranch
 from app.models.webhooks import WebhookDelivery, WebhookDeliveryAttempt, WebhookEndpoint
 from app.models.identity import AuthSession, Company, User
+from app.models.email_verification import EmailVerificationToken
 from app.models.operations import MaintenanceSchedule, WorkOrder, WorkOrderEvent
 from app.models.renewals import AgreementRenewal
 from app.models.recurring import RecurringInvoiceSchedule
@@ -16,6 +17,6 @@ from app.models.password_reset import PasswordResetToken
 
 __all__ = [
     "Agreement", "AgreementEvent", "AgreementLine", "AgreementVersion", "Attachment", "AuthSession", "RecurringInvoiceSchedule", "WebhookEndpoint", "WebhookDelivery", "WebhookDeliveryAttempt",
-    "Company", "CompanyBranch", "InvoiceCredit", "PaymentRefund", "CustomerImportJob", "CustomerImportRow", "BranchBusinessHours", "BranchClosure", "Contact", "Customer", "Equipment", "Invoice", "InvoiceEvent", "InvoiceLine",
+    "Company", "EmailVerificationToken", "CompanyBranch", "InvoiceCredit", "PaymentRefund", "CustomerImportJob", "CustomerImportRow", "BranchBusinessHours", "BranchClosure", "Contact", "Customer", "Equipment", "Invoice", "InvoiceEvent", "InvoiceLine",
     "MaintenanceSchedule", "NotificationAttempt", "NotificationOutbox", "PasswordResetToken", "Payment", "ServiceCatalogItem", "ServiceLocation", "SmsAttempt", "SmsOutbox", "User", "WorkOrder", "WorkOrderEvent", "AgreementRenewal",
 ]

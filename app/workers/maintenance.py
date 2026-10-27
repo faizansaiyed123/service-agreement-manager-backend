@@ -62,7 +62,6 @@ def run_once(
                             WorkOrder.occurrence_date == occurrence,
                         ))
                         if existing is not None:
-                            # Recover a schedule whose occurrence exists but whose cursor was not advanced.
                             schedule.next_due_date = next_occurrence(occurrence, schedule.frequency)
                             schedule.last_generation_error = None
                             db.flush()
@@ -123,7 +122,6 @@ def run_once(
                     )
                     break
                 except IntegrityError:
-                    # Savepoint rollback leaves the outer transaction usable.
                     existing = db.scalar(select(WorkOrder).where(
                         WorkOrder.maintenance_schedule_id == schedule.id,
                         WorkOrder.occurrence_date == occurrence,
