@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_roles
-from app.branch_schemas import (
+from app.schemas.branches import (
     BranchClosureCreate,
     BranchClosureRead,
     BranchCreate,

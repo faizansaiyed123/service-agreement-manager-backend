@@ -5,7 +5,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.billing_schemas import InvoiceLineInput
+from app.schemas.billing import InvoiceLineInput
 from app.core.errors import DomainError
 from app.models import Company, Customer, Invoice, InvoiceLine, RecurringInvoiceSchedule, ServiceLocation
 

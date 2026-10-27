@@ -13,7 +13,7 @@ from app.core.errors import DomainError
 from app.core.webhook_crypto import encrypt_secret
 from app.db.session import get_db
 from app.models import User, WebhookDelivery, WebhookDeliveryAttempt, WebhookEndpoint
-from app.webhook_schemas import (
+from app.schemas.webhooks import (
     WebhookDeliveryAttemptRead,
     WebhookDeliveryRead,
     WebhookEndpointCreated,

@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_roles
-from app.assets_schemas import (
+from app.schemas.assets import (
     EquipmentCreate, EquipmentRead, EquipmentUpdate, ServiceCatalogCreate,
     ServiceCatalogRead, ServiceCatalogUpdate,
 )

@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_user, require_roles
-from app.billing_schemas import InvoiceBaseRead, InvoiceCreate, InvoiceCreditCreate, InvoiceCreditRead, InvoiceEventRead, InvoiceLineInput, InvoiceRead, InvoiceUpdate, PaymentCreate, PaymentRead, PaymentRefundCreate, PaymentRefundRead, VoidInvoice
+from app.schemas.billing import InvoiceBaseRead, InvoiceCreate, InvoiceCreditCreate, InvoiceCreditRead, InvoiceEventRead, InvoiceLineInput, InvoiceRead, InvoiceUpdate, PaymentCreate, PaymentRead, PaymentRefundCreate, PaymentRefundRead, VoidInvoice
 from app.core.errors import DomainError
 from app.db.session import get_db
 from app.webhook_service import publish_webhook_event

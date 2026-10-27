@@ -5,7 +5,7 @@ from app.api.deps import get_current_user, require_roles
 from app.core.errors import DomainError
 from app.db.session import get_db
 from app.models import Company, User
-from app.schemas import CompanyRead, CompanyUpdate
+from app.schemas.common import CompanyRead, CompanyUpdate
 
 router = APIRouter(prefix="/companies", tags=["companies"])
 

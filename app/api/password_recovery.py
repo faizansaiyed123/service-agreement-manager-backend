@@ -15,7 +15,7 @@ from app.core.errors import DomainError
 from app.core.security import hash_password, verify_password
 from app.db.session import get_db
 from app.models import AuthSession, Company, NotificationOutbox, PasswordResetToken, User
-from app.password_recovery_schemas import PasswordRecoveryConfirm, PasswordRecoveryRequest
+from app.schemas.password_recovery import PasswordRecoveryConfirm, PasswordRecoveryRequest
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 RECOVERY_MESSAGE = "If an account exists for this email, password reset instructions will be sent."
