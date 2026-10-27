@@ -95,6 +95,8 @@ jobs:
           python - <<'PY'
           import http.cookiejar
           import json
+          import subprocess
+          from urllib.parse import parse_qs, urlsplit
           import time
           import urllib.error
           import urllib.request
@@ -130,28 +132,88 @@ jobs:
           print("Production interactive API docs and OpenAPI schema are disabled")
 
           origin = "https://app.example.com"
-          status, headers, raw = request("/api/v1/auth/register", method="POST", headers={"Origin": origin}, body={
-              "company_name": "Production Smoke HVAC",
-              "full_name": "Smoke Test Owner",
-              "email": "prod-smoke@example.com",
-              "password": "correct-horse-battery-42",
-          })
-          payload = json.loads(raw)
-          assert status == 201, (status, payload)
-          assert payload.get("authenticated") is True, payload
-          assert "access_token" not in payload and "refresh_token" not in payload, payload
+          def register_and_login(company_name, full_name, email, registration_password, final_password):
+              status, registration_headers, raw = request("/api/v1/auth/register", method="POST", headers={"Origin": origin}, body={
+                  "company_name": company_name,
+                  "full_name": full_name,
+                  "email": email,
+                  "password": registration_password,
+              })
+              payload = json.loads(raw)
+              expected_message = "If this email address can be registered, verification instructions will be sent."
+              assert status == 201 and payload == {"message": expected_message}, (status, payload)
+              assert not (registration_headers.get_all("Set-Cookie") or []), registration_headers.get_all("Set-Cookie")
 
-          cookie_values = {}
-          for item in headers.get_all("Set-Cookie") or []:
-              parsed = SimpleCookie()
-              parsed.load(item)
-              for name, morsel in parsed.items():
-                  cookie_values[name] = morsel.value
-                  assert morsel["httponly"], (name, item)
-                  assert morsel["secure"], (name, item)
-                  assert morsel["samesite"].lower() == "lax", (name, item)
-          assert "sam_access" in cookie_values and "sam_refresh" in cookie_values, cookie_values
+              status, _, raw = request("/api/v1/auth/login", method="POST", headers={"Origin": origin}, body={
+                  "email": email, "password": registration_password,
+              })
+              assert status == 403, (status, raw)
 
+              sql_email = email.replace("'", "''")
+              query = (
+                  "SELECT body FROM notification_outbox "
+                  "WHERE event_type = 'auth.email_verification' "
+                  f"AND recipient_email = '{sql_email}' "
+                  "ORDER BY created_at DESC LIMIT 1"
+              )
+              notification = subprocess.run(
+                  [
+                      "docker", "compose", "--env-file", ".env.production",
+                      "-f", "docker-compose.production.yml", "exec", "-T", "db",
+                      "psql", "-U", "sam", "-d", "service_agreements", "-v",
+                      "ON_ERROR_STOP=1", "-tA", "-c", query,
+                  ],
+                  check=True,
+                  capture_output=True,
+                  text=True,
+              ).stdout.strip()
+              verification_url = next(
+                  (line.strip() for line in notification.splitlines()
+                   if line.strip().startswith("https://app.example.com/verify-email#")),
+                  None,
+              )
+              assert verification_url, (email, notification)
+              token = parse_qs(urlsplit(verification_url).fragment).get("token", [None])[0]
+              assert token, email
+
+              status, _, raw = request(
+                  "/api/v1/auth/verify-email",
+                  method="POST",
+                  headers={"Origin": origin},
+                  body={"token": token, "new_password": final_password},
+              )
+              assert status == 204, (status, raw)
+
+              status, _, raw = request("/api/v1/auth/login", method="POST", headers={"Origin": origin}, body={
+                  "email": email, "password": registration_password,
+              })
+              assert status == 401, (status, raw)
+
+              status, headers, raw = request("/api/v1/auth/login", method="POST", headers={"Origin": origin}, body={
+                  "email": email, "password": final_password,
+              })
+              payload = json.loads(raw)
+              assert status == 200 and payload.get("authenticated") is True, (status, payload)
+              assert "access_token" not in payload and "refresh_token" not in payload, payload
+              cookie_values = {}
+              for item in headers.get_all("Set-Cookie") or []:
+                  parsed = SimpleCookie()
+                  parsed.load(item)
+                  for name, morsel in parsed.items():
+                      cookie_values[name] = morsel.value
+                      assert morsel["httponly"], (name, item)
+                      assert morsel["secure"], (name, item)
+                      assert morsel["samesite"].lower() == "lax", (name, item)
+              assert "sam_access" in cookie_values and "sam_refresh" in cookie_values, cookie_values
+              return cookie_values
+
+          cookie_values = register_and_login(
+              "Production Smoke HVAC",
+              "Smoke Test Owner",
+              "prod-smoke@example.com",
+              "correct-horse-battery-42",
+              "confirmed-owner-password-42",
+          )
           access = cookie_values["sam_access"]
           refresh = cookie_values["sam_refresh"]
           status, _, raw = request("/api/v1/auth/me", headers={"Origin": origin, "Cookie": "sam_access=" + access})
@@ -167,21 +229,14 @@ jobs:
               rotated.update({name: value.value for name, value in parsed.items()})
           assert "sam_access" in rotated and "sam_refresh" in rotated, rotated
 
-          # Prove data created in one cookie-authenticated tenant cannot be read by another tenant.
-          status, second_headers, raw = request("/api/v1/auth/register", method="POST", headers={"Origin": origin}, body={
-              "company_name": "Second Production Smoke HVAC",
-              "full_name": "Second Smoke Owner",
-              "email": "prod-smoke-second@example.com",
-              "password": "correct-horse-battery-43",
-          })
-          second_payload = json.loads(raw)
-          assert status == 201 and second_payload.get("authenticated") is True, (status, second_payload)
-          second_cookies = {}
-          for item in second_headers.get_all("Set-Cookie") or []:
-              parsed = SimpleCookie()
-              parsed.load(item)
-              second_cookies.update({name: value.value for name, value in parsed.items()})
-          assert "sam_access" in second_cookies, second_cookies
+          # Register and verify a second tenant, then prove tenant isolation.
+          second_cookies = register_and_login(
+              "Second Production Smoke HVAC",
+              "Second Smoke Owner",
+              "prod-smoke-second@example.com",
+              "correct-horse-battery-43",
+              "confirmed-owner-password-43",
+          )
 
           first_auth = {"Origin": origin, "Cookie": "sam_access=" + rotated["sam_access"]}
           second_auth = {"Origin": origin, "Cookie": "sam_access=" + second_cookies["sam_access"]}
@@ -215,11 +270,16 @@ jobs:
           assert status == 204, status
           print("Production cookie, refresh rotation, origin/CSRF, and logout checks passed")
 
+          rate_limited = False
           for attempt in range(10):
-              status, _, _ = request("/api/v1/auth/login", method="POST", headers={"Origin": origin}, body={
+              status, _, raw = request("/api/v1/auth/login", method="POST", headers={"Origin": origin}, body={
                   "email": "prod-smoke@example.com", "password": "deliberately-wrong",
               })
-              assert status == 401, (attempt, status)
+              if status == 429:
+                  rate_limited = True
+                  break
+              assert status == 401, (attempt, status, raw)
+          assert rate_limited, "Redis-backed authentication rate limit did not engage"
           status, _, raw = request("/api/v1/auth/login", method="POST", headers={"Origin": origin}, body={
               "email": "prod-smoke@example.com", "password": "deliberately-wrong",
           })
@@ -237,7 +297,7 @@ jobs:
 
           request = urllib.request.Request(
               "http://127.0.0.1:18000/api/v1/auth/login",
-              data=json.dumps({"email":"prod-smoke-second@example.com","password":"correct-horse-battery-43"}).encode(),
+              data=json.dumps({"email":"prod-smoke-second@example.com","password":"confirmed-owner-password-43"}).encode(),
               headers={"Content-Type":"application/json"},
               method="POST",
           )
