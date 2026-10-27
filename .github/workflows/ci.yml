@@ -36,6 +36,8 @@ jobs:
         run: |
           python -m pip install --no-cache-dir pip-audit
           pip-audit --local --progress-spinner off
+      - name: Syntax-check production backup and restore scripts
+        run: bash -n scripts/backup-production.sh scripts/restore-production.sh
       - run: ruff check .
       - name: Upgrade PostgreSQL schema
         run: alembic upgrade head
@@ -57,16 +59,381 @@ jobs:
         run: |
           cp .env.production.example .env.production
           docker compose --env-file .env.production -f docker-compose.production.yml config --quiet
-      - name: Build production runtime image
+      - name: Build production runtime images
         run: docker compose --env-file .env.production -f docker-compose.production.yml build
-      - name: Prepare local environment
-        run: cp .env.example .env
-      - name: Start API and background workers
-        run: docker compose --profile email --profile sms up --build --wait -d
-      - name: Dump service logs if startup failed
+      - name: Create disposable production smoke-test secrets
+        run: |
+          cat > .env.production <<'EOF'
+          APP_NAME=Service Agreement Manager API
+          APP_ENV=production
+          DEBUG=false
+          API_V1_PREFIX=/api/v1
+          JWT_SECRET_KEY=ci-only-random-jwt-secret-for-production-smoke-test-1234567890
+          ACCESS_TOKEN_MINUTES=15
+          REFRESH_TOKEN_DAYS=14
+          CORS_ORIGINS=https://app.example.com
+          COOKIE_SAMESITE=lax
+          SMTP_HOST=smtp.example.com
+          SMTP_PORT=587
+          SMTP_FROM_EMAIL=no-reply@example.com
+          SMTP_STARTTLS=true
+          PASSWORD_RESET_URL=https://app.example.com/reset-password
+          EMAIL_VERIFICATION_URL=https://app.example.com/verify-email
+          STORAGE_BACKEND=local
+          STORAGE_ROOT=/srv/app/storage
+          WEBHOOK_ENCRYPTION_KEY=ci-only-webhook-encryption-key-1234567890abcdef
+          NOTIFICATION_ENCRYPTION_KEY=ci-only-notification-encryption-key-1234567890abcdef
+          POSTGRES_PASSWORD=ciPostgresPass0123456789abcdefABCDEF012345
+          REDIS_PASSWORD=ciRedisPass0123456789abcdefABCDEF012345
+          API_PORT=18000
+          EOF
+          chmod 600 .env.production
+      - name: Start isolated production stack
+        run: docker compose --env-file .env.production -f docker-compose.production.yml up --build --wait -d
+      - name: Verify production health, cookie auth, CSRF and shared rate limiting
+        run: |
+          python - <<'PY'
+          import http.cookiejar
+          import json
+          import subprocess
+          from urllib.parse import parse_qs, urlsplit
+          import time
+          import urllib.error
+          import urllib.request
+          from http.cookies import SimpleCookie
+
+          base = "http://127.0.0.1:18000"
+          def request(path, *, method="GET", body=None, headers=None):
+              data = None if body is None else json.dumps(body).encode()
+              merged = {"Content-Type": "application/json"} if body is not None else {}
+              merged.update(headers or {})
+              req = urllib.request.Request(base + path, data=data, headers=merged, method=method)
+              try:
+                  with urllib.request.urlopen(req, timeout=5) as response:
+                      return response.status, response.headers, response.read()
+              except urllib.error.HTTPError as exc:
+                  return exc.code, exc.headers, exc.read()
+
+          for path in ("/health/live", "/health/ready"):
+              for attempt in range(30):
+                  status, _, body = request(path)
+                  if status == 200:
+                      print(path, body.decode())
+                      break
+                  time.sleep(2)
+              else:
+                  raise SystemExit(f"Production health check failed: {path} -> {status}")
+
+          for path in ("/docs", "/redoc", "/openapi.json"):
+              status, _, _ = request(path)
+              assert status == 404, f"Production documentation endpoint must be disabled: {path} -> {status}"
+          status, _, raw = request("/")
+          assert status == 200 and "docs" not in json.loads(raw), (status, raw)
+          print("Production interactive API docs and OpenAPI schema are disabled")
+
+          origin = "https://app.example.com"
+          def register_and_login(company_name, full_name, email, registration_password, final_password):
+              status, registration_headers, raw = request("/api/v1/auth/register", method="POST", headers={"Origin": origin}, body={
+                  "company_name": company_name,
+                  "full_name": full_name,
+                  "email": email,
+                  "password": registration_password,
+              })
+              payload = json.loads(raw)
+              expected_message = "If this email address can be registered, verification instructions will be sent."
+              assert status == 201 and payload == {"message": expected_message}, (status, payload)
+              assert not (registration_headers.get_all("Set-Cookie") or []), registration_headers.get_all("Set-Cookie")
+
+              status, _, raw = request("/api/v1/auth/login", method="POST", headers={"Origin": origin}, body={
+                  "email": email, "password": registration_password,
+              })
+              assert status == 403, (status, raw)
+
+              sql_email = email.replace("'", "''")
+              query = (
+                  "SELECT body FROM notification_outbox "
+                  "WHERE event_type = 'auth.email_verification' "
+                  f"AND recipient_email = '{sql_email}' "
+                  "ORDER BY created_at DESC LIMIT 1"
+              )
+              notification = subprocess.run(
+                  [
+                      "docker", "compose", "--env-file", ".env.production",
+                      "-f", "docker-compose.production.yml", "exec", "-T", "db",
+                      "psql", "-U", "sam", "-d", "service_agreements", "-v",
+                      "ON_ERROR_STOP=1", "-tA", "-c", query,
+                  ],
+                  check=True,
+                  capture_output=True,
+                  text=True,
+              ).stdout.strip()
+              verification_url = next(
+                  (line.strip() for line in notification.splitlines()
+                   if line.strip().startswith("https://app.example.com/verify-email#")),
+                  None,
+              )
+              assert verification_url, (email, notification)
+              token = parse_qs(urlsplit(verification_url).fragment).get("token", [None])[0]
+              assert token, email
+
+              status, _, raw = request(
+                  "/api/v1/auth/verify-email",
+                  method="POST",
+                  headers={"Origin": origin},
+                  body={"token": token, "new_password": final_password},
+              )
+              assert status == 204, (status, raw)
+
+              status, _, raw = request("/api/v1/auth/login", method="POST", headers={"Origin": origin}, body={
+                  "email": email, "password": registration_password,
+              })
+              assert status == 401, (status, raw)
+
+              status, headers, raw = request("/api/v1/auth/login", method="POST", headers={"Origin": origin}, body={
+                  "email": email, "password": final_password,
+              })
+              payload = json.loads(raw)
+              assert status == 200 and payload.get("authenticated") is True, (status, payload)
+              assert "access_token" not in payload and "refresh_token" not in payload, payload
+              cookie_values = {}
+              for item in headers.get_all("Set-Cookie") or []:
+                  parsed = SimpleCookie()
+                  parsed.load(item)
+                  for name, morsel in parsed.items():
+                      cookie_values[name] = morsel.value
+                      assert morsel["httponly"], (name, item)
+                      assert morsel["secure"], (name, item)
+                      assert morsel["samesite"].lower() == "lax", (name, item)
+              assert "sam_access" in cookie_values and "sam_refresh" in cookie_values, cookie_values
+              return cookie_values
+
+          cookie_values = register_and_login(
+              "Production Smoke HVAC",
+              "Smoke Test Owner",
+              "prod-smoke@example.com",
+              "correct-horse-battery-42",
+              "confirmed-owner-password-42",
+          )
+          access = cookie_values["sam_access"]
+          refresh = cookie_values["sam_refresh"]
+          status, _, raw = request("/api/v1/auth/me", headers={"Origin": origin, "Cookie": "sam_access=" + access})
+          assert status == 200, (status, raw)
+          status, refresh_headers, raw = request("/api/v1/auth/refresh", method="POST", headers={"Origin": origin, "Cookie": "sam_refresh=" + refresh})
+          payload = json.loads(raw)
+          assert status == 200 and payload.get("authenticated") is True, (status, payload)
+          assert "access_token" not in payload and "refresh_token" not in payload, payload
+          rotated = {}
+          for item in refresh_headers.get_all("Set-Cookie") or []:
+              parsed = SimpleCookie()
+              parsed.load(item)
+              rotated.update({name: value.value for name, value in parsed.items()})
+          assert "sam_access" in rotated and "sam_refresh" in rotated, rotated
+
+          # Register and verify a second tenant, then prove tenant isolation.
+          second_cookies = register_and_login(
+              "Second Production Smoke HVAC",
+              "Second Smoke Owner",
+              "prod-smoke-second@example.com",
+              "correct-horse-battery-43",
+              "confirmed-owner-password-43",
+          )
+
+          first_auth = {"Origin": origin, "Cookie": "sam_access=" + rotated["sam_access"]}
+          second_auth = {"Origin": origin, "Cookie": "sam_access=" + second_cookies["sam_access"]}
+          status, _, raw = request("/api/v1/companies/current", headers=first_auth)
+          first_company = json.loads(raw)
+          assert status == 200, (status, raw)
+          status, _, raw = request("/api/v1/companies/current", headers=second_auth)
+          second_company = json.loads(raw)
+          assert status == 200 and first_company["id"] != second_company["id"], (status, first_company, second_company)
+
+          status, _, raw = request("/api/v1/customers", method="POST", headers=first_auth, body={
+              "name": "Cookie Tenant-Isolation Customer",
+              "kind": "commercial",
+              "email": "tenant-isolation@example.com",
+          })
+          customer = json.loads(raw)
+          assert status == 201, (status, customer)
+          status, _, raw = request("/api/v1/customers/" + customer["id"], headers=second_auth)
+          assert status == 404, (status, raw)
+          status, _, raw = request("/api/v1/customers", headers=second_auth)
+          assert status == 200 and all(row["id"] != customer["id"] for row in json.loads(raw)), (status, raw)
+          print("Cookie-authenticated cross-tenant isolation passed")
+
+          # Unknown Origin is blocked for reads as well as cookie-authenticated writes.
+          status, _, raw = request("/api/v1/customers", headers={"Origin": "https://attacker.example", "Cookie": "sam_access=" + rotated["sam_access"]})
+          assert status == 403, (status, raw)
+
+          status, _, raw = request("/api/v1/auth/logout", method="POST", headers={"Cookie": "sam_access=" + rotated["sam_access"], "Origin": "https://attacker.example"})
+          assert status == 403, (status, raw)
+          status, headers, _ = request("/api/v1/auth/logout", method="POST", headers={"Cookie": "sam_access=" + rotated["sam_access"], "Origin": origin})
+          assert status == 204, status
+          print("Production cookie, refresh rotation, origin/CSRF, and logout checks passed")
+
+          rate_limited = False
+          for attempt in range(10):
+              status, _, raw = request("/api/v1/auth/login", method="POST", headers={"Origin": origin}, body={
+                  "email": "prod-smoke@example.com", "password": "deliberately-wrong",
+              })
+              if status == 429:
+                  rate_limited = True
+                  break
+              assert status == 401, (attempt, status, raw)
+          assert rate_limited, "Redis-backed authentication rate limit did not engage"
+          status, _, raw = request("/api/v1/auth/login", method="POST", headers={"Origin": origin}, body={
+              "email": "prod-smoke@example.com", "password": "deliberately-wrong",
+          })
+          assert status == 429, (status, raw)
+          print("Redis-backed authentication rate limiting passed")
+          PY
+      - name: Verify encrypted off-site backup and destructive restore workflow
+        run: |
+          set -euo pipefail
+          # Get a non-browser test session; the test account is created by the previous smoke step.
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          request = urllib.request.Request(
+              "http://127.0.0.1:18000/api/v1/auth/login",
+              data=json.dumps({"email":"prod-smoke-second@example.com","password":"confirmed-owner-password-43"}).encode(),
+              headers={"Content-Type":"application/json"},
+              method="POST",
+          )
+          with urllib.request.urlopen(request, timeout=10) as response:
+              payload = json.load(response)
+          token = payload.get("access_token")
+          assert token and payload.get("refresh_token")
+          token_path = os.path.join(os.environ["RUNNER_TEMP"], "sam-backup-test-token")
+          with open(token_path, "w", encoding="utf-8") as token_file:
+              token_file.write(token)
+          PY
+          chmod 600 "$RUNNER_TEMP/sam-backup-test-token"
+          export SAM_BACKUP_TEST_TOKEN="$(cat "$RUNNER_TEMP/sam-backup-test-token")"
+          mkdir -p "$RUNNER_TEMP/fake-aws" "$RUNNER_TEMP/fake-s3" "$RUNNER_TEMP/sam-backups"
+          cat > "$RUNNER_TEMP/fake-aws/aws" <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          [[ "${1:-}" == "s3" && "${2:-}" == "cp" ]] || { echo "Unsupported fake AWS command" >&2; exit 2; }
+          shift 2
+          args=()
+          while (($#)); do
+            case "$1" in
+              --only-show-errors) shift ;;
+              --sse) shift 2 ;;
+              *) args+=("$1"); shift ;;
+            esac
+          done
+          [[ ${#args[@]} -eq 2 ]] || { echo "Expected source and destination" >&2; exit 2; }
+          map_path() {
+            case "$1" in
+              s3://*) printf '%s/%s' "$AWS_FAKE_S3_ROOT" "${1#s3://}" ;;
+              *) printf '%s' "$1" ;;
+            esac
+          }
+          src="$(map_path "${args[0]}")"
+          dst="$(map_path "${args[1]}")"
+          mkdir -p "$(dirname "$dst")"
+          cp -- "$src" "$dst"
+          SH
+          chmod 700 "$RUNNER_TEMP/fake-aws/aws"
+          export PATH="$RUNNER_TEMP/fake-aws:$PATH"
+          export AWS_FAKE_S3_ROOT="$RUNNER_TEMP/fake-s3"
+          export ENV_FILE="$GITHUB_WORKSPACE/.env.production"
+          export COMPOSE_FILE="$GITHUB_WORKSPACE/docker-compose.production.yml"
+          export BACKUP_DIRECTORY="$RUNNER_TEMP/sam-backups"
+          export BACKUP_ENCRYPTION_KEY="ci-backup-encryption-key-unique-over-32-characters-123456"
+          export BACKUP_S3_URI="s3://sam-ci/production-backups"
+          export BACKUP_LOCAL_RETENTION_DAYS=14
+          bash scripts/backup-production.sh
+          backup_file="$(find "$RUNNER_TEMP/fake-s3/sam-ci/production-backups" -maxdepth 1 -type f -name '*.gpg' -print -quit)"
+          [[ -n "$backup_file" && -s "$backup_file" ]]
+          backup_name="$(basename "$backup_file")"
+          restore_uri="s3://sam-ci/production-backups/$backup_name"
+
+          # Create a record after the snapshot. It must disappear after restoring that snapshot.
+          python - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.error
+          import urllib.request
+
+          base = "http://127.0.0.1:18000"
+          for attempt in range(30):
+              try:
+                  with urllib.request.urlopen(base + "/health/ready", timeout=3) as response:
+                      if response.status == 200:
+                          break
+              except (urllib.error.URLError, TimeoutError):
+                  time.sleep(2)
+          else:
+              raise SystemExit("API did not become ready after the backup script restarted it")
+
+          token = os.environ["SAM_BACKUP_TEST_TOKEN"]
+          request = urllib.request.Request(
+              base + "/api/v1/customers",
+              data=json.dumps({"name":"Backup Restore Marker","kind":"commercial","email":"backup-marker@example.com"}).encode(),
+              headers={"Content-Type":"application/json","Authorization":"Bearer " + token},
+              method="POST",
+          )
+          with urllib.request.urlopen(request, timeout=10) as response:
+              payload = json.load(response)
+              assert payload["name"] == "Backup Restore Marker"
+          PY
+
+          export RESTORE_CONFIRMATION=I_UNDERSTAND_THIS_REPLACES_PRODUCTION_DATA
+          bash scripts/restore-production.sh "$restore_uri"
+
+          python - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          base = "http://127.0.0.1:18000"
+          token = os.environ["SAM_BACKUP_TEST_TOKEN"]
+          def get(path):
+              request = urllib.request.Request(base + path, headers={"Authorization":"Bearer " + token})
+              try:
+                  with urllib.request.urlopen(request, timeout=5) as response:
+                      return response.status, response.read()
+              except urllib.error.HTTPError as exc:
+                  return exc.code, exc.read()
+
+          for attempt in range(30):
+              status, body = get("/health/ready")
+              if status == 200:
+                  break
+              time.sleep(2)
+          else:
+              raise SystemExit(f"Restored API failed health/readiness: {status} {body!r}")
+
+          status, body = get("/api/v1/auth/me")
+          assert status == 200, (status, body)
+          status, body = get("/api/v1/customers?q=" + urllib.parse.quote("Backup Restore Marker"))
+          assert status == 200, (status, body)
+          records = json.loads(body)
+          assert all(record["name"] != "Backup Restore Marker" for record in records), records
+          print("Encrypted off-site backup, integrity checks, database restore, attachment restore, and post-restore API verification passed")
+          PY
+      - name: Dump production service logs if startup failed
         if: failure()
-        run: docker compose --profile email --profile sms logs --no-color db api webhook-worker maintenance-worker notification-worker sms-worker || true
-      - name: Verify database readiness through the API
+        run: docker compose --env-file .env.production -f docker-compose.production.yml logs --no-color db redis api billing-worker webhook-worker maintenance-worker notification-worker sms-worker || true
+      - name: Stop production smoke-test stack
+        if: always()
+        run: docker compose --env-file .env.production -f docker-compose.production.yml down -v || true
+      - name: Prepare local development environment
+        if: success()
+        run: cp .env.example .env
+      - name: Start local API and background workers
+        if: success()
+        run: docker compose --profile email --profile sms up --build --wait -d
+      - name: Verify local API readiness
+        if: success()
         run: |
           python - <<'PY'
           import time
@@ -87,8 +454,9 @@ jobs:
           else:
               raise SystemExit(f"API readiness check failed: {last_error}")
           PY
-      - name: Show service status
+      - name: Show local service status
+        if: success()
         run: docker compose --profile email --profile sms ps
-      - name: Tear down containers
+      - name: Tear down local containers
         if: always()
-        run: docker compose --profile email --profile sms down -v
+        run: docker compose --profile email --profile sms down -v || true

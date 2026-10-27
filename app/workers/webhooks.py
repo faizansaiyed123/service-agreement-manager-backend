@@ -1,17 +1,18 @@
 import hashlib
 import hmac
+import http.client
 import ipaddress
 import json
 import logging
 import random
 import socket
+import ssl
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlsplit
 from uuid import UUID
 
-import httpx
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
@@ -29,10 +30,14 @@ class WebhookDeliveryError(RuntimeError):
     pass
 
 
-def validate_target(url: str) -> None:
+def validate_target(url: str) -> list[str]:
     parsed = urlsplit(url)
     if parsed.scheme != "https" or not parsed.hostname:
         raise WebhookDeliveryError("Webhook target must use HTTPS")
+    if parsed.username or parsed.password:
+        raise WebhookDeliveryError("Webhook target must not embed credentials in the URL")
+    if parsed.port not in (None, 443):
+        raise WebhookDeliveryError("Webhook target must use the standard HTTPS port 443")
     try:
         addresses = {
             ipaddress.ip_address(result[4][0])
@@ -42,18 +47,39 @@ def validate_target(url: str) -> None:
                 type=socket.SOCK_STREAM,
             )
         }
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         raise WebhookDeliveryError("Webhook target hostname could not be resolved") from exc
+    if not addresses:
+        raise WebhookDeliveryError("Webhook target hostname did not resolve to an address")
     for address in addresses:
-        if (
-            address.is_private
-            or address.is_loopback
-            or address.is_link_local
-            or address.is_multicast
-            or address.is_reserved
-            or address.is_unspecified
-        ):
+        if not address.is_global:
             raise WebhookDeliveryError("Webhook target resolves to a non-public network address")
+    # Pin the transport to the validated IP. The TLS context still verifies the original
+    # hostname, preventing a second DNS lookup from opening a rebinding/SSRF window.
+    return sorted(str(address) for address in addresses)
+
+
+class PinnedHTTPSConnection(http.client.HTTPSConnection):
+    """HTTPS connection pinned to a validated IP while preserving hostname TLS checks."""
+
+    def __init__(self, hostname: str, pinned_ip: str, *, timeout: float = 10.0) -> None:
+        super().__init__(
+            host=hostname,
+            port=443,
+            timeout=timeout,
+            context=ssl.create_default_context(),
+        )
+        self._pinned_ip = pinned_ip
+
+    def connect(self) -> None:
+        if self._tunnel_host:
+            raise WebhookDeliveryError("Proxy tunneling is not permitted for webhook delivery")
+        self.sock = socket.create_connection(
+            (self._pinned_ip, self.port),
+            self.timeout,
+            self.source_address,
+        )
+        self.sock = self._context.wrap_socket(self.sock, server_hostname=self.host)
 
 
 def render_payload(delivery: WebhookDelivery) -> bytes:
@@ -74,7 +100,10 @@ def sign_payload(body: bytes, secret: str, timestamp: int) -> str:
 
 def send_webhook(endpoint: WebhookEndpoint, delivery: WebhookDelivery) -> tuple[int, str]:
     settings = get_settings()
-    validate_target(endpoint.url)
+    addresses = validate_target(endpoint.url)
+    parsed = urlsplit(endpoint.url)
+    if not parsed.hostname:
+        raise WebhookDeliveryError("Webhook target hostname is missing")
     secret = decrypt_secret(endpoint.secret_ciphertext, settings.webhook_encryption_key)
     body = render_payload(delivery)
     timestamp = int(datetime.now(UTC).timestamp())
@@ -86,14 +115,23 @@ def send_webhook(endpoint: WebhookEndpoint, delivery: WebhookDelivery) -> tuple[
         "X-SAM-Webhook-Timestamp": str(timestamp),
         "X-SAM-Webhook-Signature": sign_payload(body, secret, timestamp),
     }
-    with httpx.Client(timeout=10.0, follow_redirects=False) as client:
-        response = client.post(endpoint.url, content=body, headers=headers)
-    response_body = response.text[:4000]
-    if not 200 <= response.status_code < 300:
+    request_target = parsed.path or "/"
+    if parsed.query:
+        request_target += "?" + parsed.query
+    # Connect to the validated literal IP; HTTP Host and TLS verification still use
+    # the user-configured hostname. Never follow redirects or inherit proxy variables.
+    with PinnedHTTPSConnection(parsed.hostname, addresses[0], timeout=10.0) as client:
+        client.request("POST", request_target, body=body, headers=headers)
+        if client.sock is not None:
+            client.sock.settimeout(3.0)
+        response = client.getresponse()
+        response_status = response.status
+        response_body = response.read(4000).decode("utf-8", errors="replace")
+    if not 200 <= response_status < 300:
         raise WebhookDeliveryError(
-            f"Webhook endpoint returned HTTP {response.status_code}: {response_body}"
+            f"Webhook endpoint returned HTTP {response_status}: {response_body}"
         )
-    return response.status_code, response_body
+    return response_status, response_body
 
 
 def safe_error(exc: Exception) -> str:

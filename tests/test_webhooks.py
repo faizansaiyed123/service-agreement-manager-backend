@@ -1,11 +1,14 @@
 import hashlib
 import hmac
 import json
+import socket
+
+import pytest
 from datetime import UTC, datetime
 
 from app.models import User, WebhookDelivery
 from app.webhook_service import publish_webhook_event
-from app.workers.webhooks import run_once, sign_payload
+from app.workers.webhooks import PinnedHTTPSConnection, WebhookDeliveryError, run_once, sign_payload, validate_target
 from conftest import TestingSession
 
 
@@ -20,6 +23,51 @@ def register(client, company, email):
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 
+def test_webhook_target_validation_blocks_private_addresses_and_nonstandard_urls(monkeypatch):
+    with pytest.raises(WebhookDeliveryError, match="HTTPS"):
+        validate_target("http://example.com/webhook")
+    with pytest.raises(WebhookDeliveryError, match="credentials"):
+        validate_target("https://user:password@example.com/webhook")
+    with pytest.raises(WebhookDeliveryError, match="port 443"):
+        validate_target("https://example.com:8443/webhook")
+
+    monkeypatch.setattr(
+        "app.workers.webhooks.socket.getaddrinfo",
+        lambda host, port, **kwargs: [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("100.64.0.10", port))
+        ],
+    )
+    with pytest.raises(WebhookDeliveryError, match="non-public"):
+        validate_target("https://customer-webhook.example/webhook")
+
+    monkeypatch.setattr(
+        "app.workers.webhooks.socket.getaddrinfo",
+        lambda host, port, **kwargs: [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", port))
+        ],
+    )
+    validated = validate_target("https://customer-webhook.example/webhook")
+    assert validated == ["93.184.216.34"]
+
+    # Prove the socket connects to the prevalidated literal IP while TLS SNI/certificate
+    # verification still use the requested hostname.
+    captured = {}
+    class FakeContext:
+        def wrap_socket(self, sock, *, server_hostname):
+            captured["server_hostname"] = server_hostname
+            return sock
+
+    monkeypatch.setattr(
+        "app.workers.webhooks.socket.create_connection",
+        lambda address, timeout, source_address: (captured.update(address=address) or object()),
+    )
+    connection = PinnedHTTPSConnection("customer-webhook.example", validated[0])
+    connection._context = FakeContext()
+    connection.connect()
+    assert captured["address"] == ("93.184.216.34", 443)
+    assert captured["server_hostname"] == "customer-webhook.example"
+
+
 def test_webhook_endpoint_crud_secret_rotation_and_https_validation(client):
     headers = register(client, "Webhook HVAC", "webhook@example.com")
 
@@ -29,6 +77,20 @@ def test_webhook_endpoint_crud_secret_rotation_and_https_validation(client):
         "events": ["customer.created"],
     })
     assert invalid.status_code == 422
+
+    credential_url = client.post("/api/v1/webhooks", headers=headers, json={
+        "name": "Embedded credentials",
+        "url": "https://user:password@example.com/webhook",
+        "events": ["customer.created"],
+    })
+    assert credential_url.status_code == 422
+
+    nonstandard_port = client.post("/api/v1/webhooks", headers=headers, json={
+        "name": "Custom port",
+        "url": "https://example.com:8443/webhook",
+        "events": ["customer.created"],
+    })
+    assert nonstandard_port.status_code == 422
 
     created = client.post("/api/v1/webhooks", headers=headers, json={
         "name": "ERP",

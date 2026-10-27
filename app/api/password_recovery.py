@@ -12,6 +12,7 @@ from app.core.config import get_settings
 from app.core.auth_cookies import clear_auth_cookies
 from app.core.rate_limit import enforce_rate_limit
 from app.core.errors import DomainError
+from app.core.notification_crypto import encrypt_sensitive_message
 from app.core.security import hash_password, verify_password
 from app.db.session import get_db
 from app.models import AuthSession, Company, NotificationOutbox, PasswordResetToken, User
@@ -112,7 +113,7 @@ def request_password_recovery(
         channel="email",
         recipient_email=user.email,
         subject=subject,
-        body=body,
+        body=encrypt_sensitive_message(body, settings.notification_encryption_key),
         payload=notification_payload,
         idempotency_key=f"password-reset:{reset_token.id}",
         request_fingerprint=hashlib.sha256(fingerprint_source.encode("utf-8")).hexdigest(),

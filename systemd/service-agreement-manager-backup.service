@@ -1,0 +1,14 @@
+[Unit]
+Description=Encrypted off-site backup of Service Agreement Manager
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+UMask=0077
+EnvironmentFile=/etc/service-agreement-manager/backup.env
+WorkingDirectory=/opt/service-agreement-manager-backend
+ExecStart=/bin/bash /opt/service-agreement-manager-backend/scripts/backup-production.sh
+TimeoutStartSec=45min

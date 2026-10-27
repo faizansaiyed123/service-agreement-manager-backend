@@ -6,16 +6,20 @@ from app.core.config import Settings
 def valid_production_settings(**overrides) -> Settings:
     values = {
         "app_env": "production",
+        "database_url": "postgresql+psycopg://sam:uniqueCiDatabasePasswordLongEnough123456@db:5432/service_agreements",
+        "postgres_password": "uniqueCiDatabasePasswordLongEnough123456",
         "debug": False,
         "allow_public_registration": True,
         "cors_origins": ["https://app.example.com"],
         "jwt_secret_key": "production-secret-value-that-is-longer-than-forty-eight-characters",
+        "redis_url": "redis://:unique-ci-redis-password-at-least-32-chars-123456@redis:6379/0",
         "smtp_host": "smtp.example.com",
         "smtp_from_email": "no-reply@example.com",
         "smtp_starttls": True,
         "password_reset_url": "https://app.example.com/reset-password",
         "email_verification_url": "https://app.example.com/verify-email",
         "webhook_encryption_key": "production-webhook-secret-value-that-is-at-least-32-chars",
+        "notification_encryption_key": "production-notification-secret-value-over-32-characters",
     }
     values.update(overrides)
     return Settings(**values)
@@ -29,6 +33,38 @@ def test_production_settings_allow_signup_when_verification_is_configured():
 
     with pytest.raises(ValueError, match="recovery and verification URLs"):
         valid_production_settings(email_verification_url="https://untrusted.example/verify-email").validate_production()
+
+
+def test_production_settings_require_authenticated_private_or_tls_redis():
+    with pytest.raises(ValueError, match="REDIS_URL"):
+        valid_production_settings(redis_url=None).validate_production()
+
+    with pytest.raises(ValueError, match="REDIS_URL"):
+        valid_production_settings(redis_url="redis://redis:6379/0").validate_production()
+
+    with pytest.raises(ValueError, match="TLS"):
+        valid_production_settings(redis_url="redis://:long-secure-ci-redis-password-1234567890@cache.example.com:6379/0").validate_production()
+
+    valid_production_settings(redis_url="rediss://:long-secure-ci-redis-password-1234567890@cache.example.com:6379/0").validate_production()
+
+
+def test_production_settings_require_strong_database_credentials_and_tls():
+    with pytest.raises(ValueError, match="DATABASE_URL"):
+        valid_production_settings(database_url="postgresql+psycopg://sam:sam_dev_only@localhost:5432/service_agreements").validate_production()
+
+    with pytest.raises(ValueError, match="localhost"):
+        valid_production_settings(
+            database_url="postgresql+psycopg://sam:uniqueCiDatabasePasswordLongEnough123456@localhost:5432/service_agreements"
+        ).validate_production()
+
+    with pytest.raises(ValueError, match="sslmode"):
+        valid_production_settings(
+            database_url="postgresql+psycopg://sam:uniqueCiDatabasePasswordLongEnough123456@db.example.com:5432/service_agreements"
+        ).validate_production()
+
+    valid_production_settings(
+        database_url="postgresql+psycopg://sam:uniqueCiDatabasePasswordLongEnough123456@db.example.com:5432/service_agreements?sslmode=verify-full"
+    ).validate_production()
 
 
 def test_production_settings_require_secure_recovery_delivery():
@@ -125,4 +161,9 @@ def test_production_settings_reject_secret_placeholders():
     with pytest.raises(ValueError, match="WEBHOOK_ENCRYPTION_KEY"):
         valid_production_settings(
             webhook_encryption_key="replace-with-a-random-webhook-secret-of-at-least-64-characters"
+        ).validate_production()
+
+    with pytest.raises(ValueError, match="NOTIFICATION_ENCRYPTION_KEY"):
+        valid_production_settings(
+            notification_encryption_key="replace-with-a-random-notification-secret-of-at-least-64-characters"
         ).validate_production()

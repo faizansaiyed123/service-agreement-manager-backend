@@ -23,7 +23,7 @@ Run the full test/lint suite locally:
     docker compose exec api ruff check .
     docker compose exec api alembic check
 
-OpenAPI / Swagger: http://localhost:8000/docs
+OpenAPI / Swagger (development only): http://localhost:8000/docs. Interactive API docs and the OpenAPI schema are disabled in production.
 Liveness: http://localhost:8000/health/live
 Readiness: http://localhost:8000/health/ready
 
@@ -60,8 +60,8 @@ Real SMTP/SMS/S3 provider delivery, production deployment, TLS/proxy setup, secr
 
 ## Browser session security
 
-Browser login returns no bearer tokens in JSON. The API sets short-lived access and refresh tokens in `HttpOnly` cookies, validates exact trusted origins on browser requests, and applies CSRF checks to cookie-authenticated state changes. Browser clients must use cookies; bearer tokens remain supported for non-browser API clients. Authentication endpoints have process-local rate limits, which must be supplemented by a provider WAF. Production registration requires a single-use email verification link; the mailbox owner sets the final password after opening that link. Set `ALLOW_PUBLIC_REGISTRATION=false` for a private beta, and use `python -m app.cli create-owner` to bootstrap the first trusted owner.
+Browser login and registration return no bearer tokens in JSON. The API sets short-lived access and refresh tokens in `HttpOnly` cookies, validates exact trusted origins on browser requests, and applies CSRF checks to cookie-authenticated state changes. Browser clients must use cookies; bearer tokens remain supported for non-browser API clients. Authentication endpoints use shared Redis-backed rate limits in production and in-memory limits in development/tests. Production authentication fails closed if Redis is unavailable; provider WAF limits remain required. Production registration requires a single-use email verification link; the mailbox owner sets the final password after opening that link. Set `ALLOW_PUBLIC_REGISTRATION=false` for a private beta, and use `python -m app.cli create-owner` to bootstrap the first trusted owner.
 
 ## Production deployment
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for production environment setup, HTTPS reverse-proxy requirements, health checks, backups, and release verification. [docker-compose.production.yml](docker-compose.production.yml) binds the API to loopback and leaves PostgreSQL unpublished. The existing docker-compose.yml is for local development and publishes PostgreSQL/API ports; do not use it directly as a public production stack.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for production environment setup, HTTPS reverse-proxy requirements, shared-rate-limit configuration, encrypted off-site backup/restore scripts, health checks, and release verification. [docker-compose.production.yml](docker-compose.production.yml) binds the API to loopback and leaves PostgreSQL unpublished. The existing docker-compose.yml is for local development and publishes PostgreSQL/API ports; do not use it directly as a public production stack.

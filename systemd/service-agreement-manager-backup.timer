@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Service Agreement Manager backup
+
+[Timer]
+OnCalendar=*-*-* 02:30:00 UTC
+Persistent=true
+RandomizedDelaySec=30m
+Unit=service-agreement-manager-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:3000", "http://localhost:5173"]
     cookie_samesite: Literal["lax", "strict", "none"] = "lax"
     allow_public_registration: bool = True
+    redis_url: str | None = None
     log_level: str = "INFO"
     smtp_host: str | None = None
     smtp_port: int = Field(default=587, ge=1, le=65535)
@@ -48,6 +49,7 @@ class Settings(BaseSettings):
     storage_access_key_id: str | None = None
     storage_secret_access_key: str | None = None
     webhook_encryption_key: str = "unsafe-development-webhook-key-change-this"
+    notification_encryption_key: str = "unsafe-development-notification-key-change-this"
     webhook_poll_seconds: int = Field(default=5, ge=1, le=300)
     webhook_lease_seconds: int = Field(default=60, ge=5, le=3600)
     webhook_default_max_attempts: int = Field(default=8, ge=1, le=20)
@@ -89,19 +91,53 @@ class Settings(BaseSettings):
                 raise ValueError("Production requires a unique JWT_SECRET_KEY of at least 48 characters")
             if self._is_secret_placeholder(self.webhook_encryption_key) or len(self.webhook_encryption_key) < 32:
                 raise ValueError("Production requires a unique WEBHOOK_ENCRYPTION_KEY of at least 32 characters")
+            if self._is_secret_placeholder(self.notification_encryption_key) or len(self.notification_encryption_key) < 32:
+                raise ValueError("Production requires a unique NOTIFICATION_ENCRYPTION_KEY of at least 32 characters")
             database = urlsplit(self.database_url)
-            if (database.hostname or "").lower() == "db":
-                database_password = self.postgres_password.get_secret_value() if self.postgres_password else ""
+            database_host = (database.hostname or "").lower()
+            database_password = database.password or ""
+            if (
+                database.scheme != "postgresql+psycopg"
+                or not database_host
+                or not database.username
+                or len(database_password) < 32
+                or self._is_secret_placeholder(database_password)
+            ):
+                raise ValueError("Production DATABASE_URL must use PostgreSQL credentials with a non-placeholder password of at least 32 characters")
+            if database_host in {"localhost", "127.0.0.1", "::1"} or database_host.endswith(".localhost"):
+                raise ValueError("Production DATABASE_URL cannot point to localhost")
+            if database_host == "db":
+                compose_password = self.postgres_password.get_secret_value() if self.postgres_password else ""
                 if (
-                    len(database_password) < 32
-                    or not database_password.isalnum()
-                    or self._is_secret_placeholder(database_password)
-                    or database.password != database_password
-                    or database_password in {self.jwt_secret_key, self.webhook_encryption_key}
+                    len(compose_password) < 32
+                    or not compose_password.isalnum()
+                    or self._is_secret_placeholder(compose_password)
+                    or database_password != compose_password
+                    or compose_password in {self.jwt_secret_key, self.webhook_encryption_key, self.notification_encryption_key}
                 ):
                     raise ValueError(
                         "Production Compose requires a unique POSTGRES_PASSWORD of at least 32 URL-safe alphanumeric characters matching DATABASE_URL"
                     )
+            elif not database_host.endswith(".internal"):
+                database_options = dict(item.split("=", 1) for item in database.query.split("&") if "=" in item)
+                if database_options.get("sslmode") not in {"require", "verify-ca", "verify-full"}:
+                    raise ValueError("Production external PostgreSQL connections must use sslmode=require or stronger")
+            if not self.redis_url:
+                raise ValueError("Production requires REDIS_URL for shared authentication rate limits")
+            redis = urlsplit(self.redis_url)
+            redis_host = (redis.hostname or "").lower()
+            if (
+                redis.scheme not in {"redis", "rediss"}
+                or not redis_host
+                or redis_host in {"localhost", "127.0.0.1", "::1"}
+                or redis_host.endswith(".localhost")
+                or not redis.password
+                or len(redis.password) < 32
+                or self._is_secret_placeholder(redis.password)
+            ):
+                raise ValueError("Production REDIS_URL must use Redis authentication and a non-local host")
+            if redis.scheme == "redis" and redis_host not in {"redis"} and not redis_host.endswith(".internal"):
+                raise ValueError("Production external Redis services must use TLS (rediss://)")
             if not self.cors_origins:
                 raise ValueError("Production CORS_ORIGINS must include the public HTTPS app origin for cookie-session CSRF protection")
             if "*" in self.cors_origins:
@@ -145,7 +181,7 @@ class Settings(BaseSettings):
                 page = urlsplit(value)
                 origin = (page.scheme + "://" + page.netloc).lower()
                 invalid_local_host = not page.hostname or page.hostname.lower() in {"localhost", "127.0.0.1", "::1"} or page.hostname.lower().endswith(".localhost")
-                if page.scheme != "https" or invalid_local_host or page.query or page.fragment or origin not in trusted_origins:
+                if page.scheme != "https" or page.username or page.password or invalid_local_host or page.query or page.fragment or origin not in trusted_origins:
                     raise ValueError("Production recovery and verification URLs must use HTTPS on a trusted CORS_ORIGINS host and have no query or fragment")
 
 

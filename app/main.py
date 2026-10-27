@@ -26,7 +26,16 @@ async def lifespan(_: FastAPI):
     engine.dispose()
 
 
-app = FastAPI(title=settings.app_name, version="0.6.0", debug=settings.debug, lifespan=lifespan)
+production_mode = settings.app_env.lower() == "production"
+app = FastAPI(
+    title=settings.app_name,
+    version="0.6.0",
+    debug=settings.debug,
+    lifespan=lifespan,
+    docs_url=None if production_mode else "/docs",
+    redoc_url=None if production_mode else "/redoc",
+    openapi_url=None if production_mode else "/openapi.json",
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -98,7 +107,10 @@ def readiness() -> dict[str, str]:
 
 @app.get("/", include_in_schema=False)
 def root() -> dict[str, str]:
-    return {"name": settings.app_name, "docs": "/docs"}
+    result = {"name": settings.app_name}
+    if not production_mode:
+        result["docs"] = "/docs"
+    return result
 
 
 app.include_router(auth.router, prefix=settings.api_v1_prefix)

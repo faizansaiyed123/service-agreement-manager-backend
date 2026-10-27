@@ -86,6 +86,16 @@ def update_user(
             if not value:
                 raise DomainError(422, "invalid_field", "full_name cannot be blank")
         setattr(target, key, value)
+    if updates.get("is_active") is False:
+        revoked_at = datetime.now(UTC)
+        sessions = db.scalars(
+            select(AuthSession).where(
+                AuthSession.user_id == target.id,
+                AuthSession.revoked_at.is_(None),
+            ).with_for_update()
+        ).all()
+        for session in sessions:
+            session.revoked_at = revoked_at
     db.commit()
     db.refresh(target)
     return target

@@ -10,11 +10,46 @@ Use a supported Linux host, restrict SSH, enable unattended security updates, an
 
 Copy .env.production.example to .env.production and replace every placeholder before starting the services.
 
-Generate independent cryptographically random values for JWT_SECRET_KEY (at least 48 characters) and WEBHOOK_ENCRYPTION_KEY (at least 32 characters). Use a URL-safe alphanumeric POSTGRES_PASSWORD because Compose inserts it into the database URL. Do not commit .env.production. Keep backups of secrets in an approved secrets manager; do not paste them into tickets or chat.
+Generate independent cryptographically random values for JWT_SECRET_KEY (at least 48 characters), WEBHOOK_ENCRYPTION_KEY (at least 32 characters), NOTIFICATION_ENCRYPTION_KEY (at least 32 characters), POSTGRES_PASSWORD, and REDIS_PASSWORD. Keep database/Redis passwords URL-safe alphanumeric because Compose inserts them into service URLs. Do not commit .env.production. Keep secrets in an approved secrets manager; do not paste them into tickets or chat. Production Compose runs Redis on the private container network with password authentication and no published host port; the API fails closed for protected auth flows if the shared limiter is unavailable. Password-reset URLs are encrypted in the email outbox using the separate NOTIFICATION_ENCRYPTION_KEY and decrypted only by the email worker.
 
 Set CORS_ORIGINS to the exact public HTTPS app origin, without a trailing slash. It is also the server-side trusted Origin allowlist for cookie-session CSRF protection, so it must not be empty in production, even for the recommended same-origin proxy setup. Set COOKIE_SAMESITE=lax for same-origin or same-site deployments. Set PASSWORD_RESET_URL and EMAIL_VERIFICATION_URL to real frontend pages on that same HTTPS origin. Keep ALLOW_PUBLIC_REGISTRATION=true only if email verification and delivery are ready; signup remains pending until the recipient opens the single-use link and sets their own final password. Configure working SMTP values: production startup intentionally fails if SMTP_HOST or SMTP_FROM_EMAIL is missing, or if STARTTLS is disabled.
 
-For file uploads, local storage is persisted in the named attachments_data volume and is suitable only when one app instance shares that volume. Use the configured S3-compatible backend with HTTPS for horizontally scaled instances, and configure bucket access with a least-privilege identity. Arrange automated, encrypted backups and test restoration for the database and attachments before accepting real data.
+For file uploads, local storage is persisted in the named attachments_data volume and is suitable only when one app instance shares that volume. The HTTPS proxy must cap request bodies to slightly above the configured 25 MiB upload limit; the sample Caddy site uses a 30 MiB limit so oversized multipart requests are rejected before reaching FastAPI. Use the configured S3-compatible backend with HTTPS for horizontally scaled instances, and configure bucket access with a least-privilege identity.
+
+### Encrypted off-site database and attachment backups
+
+The repository includes [backup-production.sh](scripts/backup-production.sh) and [restore-production.sh](scripts/restore-production.sh), plus a daily systemd timer. The backup script briefly stops currently-running application writers so the PostgreSQL custom dump and local attachment archive represent the same point in time, packages a manifest/checksums, encrypts the archive using GnuPG AES-256, uploads it to a private S3 bucket, and retains a local rolling copy. Plan this scheduled pause for a low-traffic window. GPG and AWS CLI must be installed on the host.
+
+Create a root-owned backup environment file outside the repository; do not add these values to Git or paste them into chat:
+
+```sh
+sudo install -d -m 700 /etc/service-agreement-manager
+sudo install -m 600 /dev/null /etc/service-agreement-manager/backup.env
+sudoedit /etc/service-agreement-manager/backup.env
+```
+
+Set `ENV_FILE` and `COMPOSE_FILE` to the actual deployment paths, `BACKUP_DIRECTORY=/var/backups/service-agreement-manager`, an independent random `BACKUP_ENCRYPTION_KEY` of at least 32 characters, `BACKUP_S3_URI=s3://YOUR-PRIVATE-BUCKET/service-agreement-manager/`, `BACKUP_LOCAL_RETENTION_DAYS=14`, and an AWS region. Prefer a host instance role with only the necessary read/write permissions for this backup prefix; configure bucket versioning, retention, and access logging separately.
+
+Install and enable the timer (adjust the repository path if needed):
+
+```sh
+sudo cp systemd/service-agreement-manager-backup.service /etc/systemd/system/
+sudo cp systemd/service-agreement-manager-backup.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now service-agreement-manager-backup.timer
+sudo systemctl start service-agreement-manager-backup.service
+sudo systemctl status service-agreement-manager-backup.service
+```
+
+Do not consider backups ready until the first run uploaded an encrypted file and a restore has succeeded on a **separate staging environment**. Restores are destructive and require an explicit confirmation variable:
+
+```sh
+# Run from a secured admin shell after exporting the backup environment.
+export RESTORE_CONFIRMATION=I_UNDERSTAND_THIS_REPLACES_PRODUCTION_DATA
+bash scripts/restore-production.sh s3://YOUR-PRIVATE-BUCKET/service-agreement-manager/EXACT-BACKUP-FILENAME.tar.gz.gpg
+```
+
+The restore script verifies GPG integrity and the archived checksums, stops active application writers, restores the PostgreSQL dump and attachments, then restarts only the services that were running. Do not perform a production restore rehearsal on the live database.
 
 ## 3. Validate, build, and start
 
@@ -41,7 +76,7 @@ Use an email address you control and enter the password at the hidden prompt; do
 
 This Compose file is intended for a single API instance; do not scale API replicas that run migrations on startup. For a multi-instance deployment, run migrations once as a release step and use a managed database or carefully designed shared storage. Keep database upgrades and application releases coordinated, and take a backup before migrations.
 
-The standard workers for billing, webhooks, maintenance, and account notifications are started with this configuration. SMS delivery is optional. Configure SMS_PROVIDER=http and its HTTPS credentials in .env.production, then start the SMS profile:
+The production stack starts authenticated Redis for shared sliding-window authentication limits, in addition to PostgreSQL and the API. Redis has no public port and does not persist rate-limit counters. The standard workers for billing, webhooks, maintenance, and account notifications are started with this configuration. SMS delivery is optional. Configure SMS_PROVIDER=http and its HTTPS credentials in .env.production, then start the SMS profile:
 
 ```sh
 docker compose --env-file .env.production -f docker-compose.production.yml --profile sms up --build -d
@@ -66,6 +101,9 @@ Install Caddy on the host and configure a site for your real domain (replace `ap
 
 ```caddyfile
 app.example.com {
+    request_body {
+        max_size 30MB
+    }
     encode zstd gzip
     header Strict-Transport-Security "max-age=31536000"
 
@@ -101,8 +139,8 @@ Also run the backend CI suite, frontend production build, and browser-based smok
 
 ## 7. Abuse protection at the edge
 
-The application now applies sliding-window limits to login (per IP and account identifier), registration, password-reset requests, and reset confirmations. These counters are process-local, reset on restart, and are not shared across replicas; they are defense in depth, not a complete distributed abuse control. Before public launch, enable provider-level WAF/rate-limiting rules for `/api/v1/auth/login`, `/api/v1/auth/register`, `/api/v1/auth/forgot-password`, and `/api/v1/auth/reset-password`, and monitor repeated 401/429 responses and registration spikes. If the service later runs multiple API replicas, use a shared rate-limit store. Do not rely on CORS as an abuse control.
+The application now applies Redis-backed shared sliding-window limits to login (per IP and account identifier), registration, password-reset requests, and reset confirmations. If Redis is unavailable, authentication operations fail closed instead of bypassing limits. Redis is still a single service in the single-host Compose deployment; monitor it and maintain provider-level WAF/rate-limiting rules for `/api/v1/auth/login`, `/api/v1/auth/register`, `/api/v1/auth/forgot-password`, and `/api/v1/auth/reset-password`. A WAF is necessary to reject floods before they reach the app. Monitor repeated 401/429 responses and registration spikes. Do not rely on CORS as an abuse control.
 
 ## 8. Operational essentials
 
-Monitor API and worker errors, database capacity and disk, queue retry/dead-letter growth, email delivery, and storage failures. Set backup retention and recovery-point/recovery-time targets, and keep a tested restore runbook. Rotate secrets with a planned rollout; rotate the webhook encryption key only with a migration/rotation plan for already encrypted webhook credentials. Keep a rollback image available, but understand that database migrations may not be reversible.
+Monitor API and worker errors, database capacity and disk, queue retry/dead-letter growth, email delivery, storage failures, Redis availability, and backup upload success. Define backup retention and recovery-point/recovery-time targets, alert on missed timer runs, and keep a tested restore runbook. Rotate secrets with a planned rollout; rotate the webhook encryption key only with a migration/rotation plan for already encrypted webhook credentials. Keep a rollback image available, but understand that database migrations may not be reversible.
