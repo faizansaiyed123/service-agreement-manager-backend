@@ -4,7 +4,6 @@ from decimal import Decimal
 from typing import Any
 
 import stripe
-from fastapi import Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -57,7 +56,7 @@ def _stripe_error_response(exc: stripe.error.StripeError) -> dict[str, Any]:
 
 def create_payment_intent(invoice: Invoice, *, idempotency_key: str) -> dict[str, Any]:
     """Create a Stripe PaymentIntent for an invoice. Returns client_secret + payment_intent_id."""
-    client = _client()
+    _client()
     amount_cents = int((invoice.total_amount * 100).quantize(Decimal("1")))
     if amount_cents <= 0:
         raise DomainError(400, "invalid_amount", "Invoice amount must be greater than zero")

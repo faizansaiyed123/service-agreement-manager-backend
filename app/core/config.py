@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     storage_endpoint_url: str | None = None
     storage_access_key_id: str | None = None
     storage_secret_access_key: str | None = None
-webhook_encryption_key: str = Field(..., min_length=32, description="Webhook payload encryption key")
+    webhook_encryption_key: str = Field(..., min_length=32, description="Webhook payload encryption key")
     notification_encryption_key: str = Field(..., min_length=32, description="Notification payload encryption key")
     webhook_poll_seconds: int = Field(default=5, ge=1, le=300)
     webhook_lease_seconds: int = Field(default=60, ge=5, le=3600)

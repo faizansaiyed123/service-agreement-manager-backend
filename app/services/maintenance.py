@@ -28,18 +28,6 @@ def validate_context(
     ))
     if customer is None or customer.status != "active":
         raise DomainError(404, "customer_not_found", "Active customer not found")
-    branch = None
-    if branch_id is None:
-        branch = resolve_branch_id(db, company_id, location_id)
-    else:
-        branch = db.scalar(select(CompanyBranch.id).where(
-            CompanyBranch.id == branch_id,
-            CompanyBranch.company_id == company_id,
-            CompanyBranch.is_active.is_(True),
-        ))
-        if branch is None:
-            raise DomainError(404, "branch_not_found", "Active company branch not found")
-
     location = db.scalar(select(ServiceLocation).where(
         ServiceLocation.id == location_id,
         ServiceLocation.company_id == company_id,
@@ -48,6 +36,17 @@ def validate_context(
     ))
     if location is None:
         raise DomainError(404, "service_location_not_found", "Active service location not found for customer")
+
+    if branch_id is None:
+        resolved_branch_id = resolve_branch_id(db, company_id, location)
+    else:
+        resolved_branch_id = db.scalar(select(CompanyBranch.id).where(
+            CompanyBranch.id == branch_id,
+            CompanyBranch.company_id == company_id,
+            CompanyBranch.is_active.is_(True),
+        ))
+        if resolved_branch_id is None:
+            raise DomainError(404, "branch_not_found", "Active company branch not found")
     if equipment_id is not None:
         equipment = db.scalar(select(Equipment).where(
             Equipment.id == equipment_id,
@@ -70,34 +69,36 @@ def validate_context(
             raise DomainError(409, "agreement_not_active", "An active matching agreement is required")
         if for_date is not None and not (agreement.start_date <= for_date <= agreement.end_date):
             raise DomainError(409, "agreement_out_of_term", "The scheduled date is outside the agreement term")
-    return customer, location, branch
+    return customer, location, resolved_branch_id
 
 
 def _normalized(value: str | None) -> str | None:
     if value is None:
         return None
-    normalized = value.strip().casefold()
+    normalized = " ".join(value.split()).casefold()
     return normalized or None
 
 
-def resolve_branch_id(db: Session, company_id: UUID, location_id: UUID) -> UUID | None:
-    """Select the best active branch for a service location.
+def _normalized_postal(value: str | None) -> str | None:
+    """Normalize postal-code whitespace while preserving meaningful punctuation."""
+    if value is None:
+        return None
+    normalized = "".join(value.split()).casefold()
+    return normalized or None
 
-    Routing is deterministic and uses progressively broader geographic matches:
-    exact postal code, then city, then region, then country. A primary branch is
-    the final fallback when no geographic match exists. Explicit branch selection
-    bypasses this resolver.
 
-    The query loads active branches once, so routing is O(B) in the number of
-    active branches with no per-branch database queries.
+def resolve_branch_id(db: Session, company_id: UUID, location: ServiceLocation) -> UUID | None:
+    """Choose an active branch using normalized service-location address metadata.
+
+    If available, branches in the service location's country form the candidate
+    set; otherwise all active company branches are eligible. Within that set,
+    exact postal-code, city, and region matches are ranked in that order.
+    Country alone is not a geographic match. Without a postal/city/region match,
+    the primary candidate is selected; absent one, ties resolve by name then ID.
+
+    This is deterministic address-metadata routing, not driving-distance or
+    travel-time optimization. It performs one branch query and one O(B) pass.
     """
-    location = db.scalar(select(ServiceLocation).where(
-        ServiceLocation.id == location_id,
-        ServiceLocation.company_id == company_id,
-    ))
-    if location is None:
-        raise DomainError(404, "service_location_not_found", "Service location not found")
-
     branches = list(db.scalars(select(CompanyBranch).where(
         CompanyBranch.company_id == company_id,
         CompanyBranch.is_active.is_(True),
@@ -106,40 +107,33 @@ def resolve_branch_id(db: Session, company_id: UUID, location_id: UUID) -> UUID 
         return None
 
     location_country = _normalized(location.country_code)
-    location_postal = _normalized(location.postal_code)
+    location_postal = _normalized_postal(location.postal_code)
     location_city = _normalized(location.city)
     location_region = _normalized(location.region)
 
     same_country = [
         branch for branch in branches
-        if not location_country or _normalized(branch.country_code) == location_country
+        if location_country is None or _normalized(branch.country_code) == location_country
     ]
     candidates = same_country or branches
 
-    def score(branch: CompanyBranch) -> tuple[int, int, int, int, int, str, str]:
-        postal = location_postal and _normalized(branch.postal_code) == location_postal
-        city = location_city and _normalized(branch.city) == location_city
-        region = location_region and _normalized(branch.region) == location_region
-        country = location_country and _normalized(branch.country_code) == location_country
-        return (
-            -1 if postal else 0,
-            -1 if city else 0,
-            -1 if region else 0,
-            -1 if country else 0,
-            0 if branch.is_primary else 1,
-            branch.name.casefold(),
-            str(branch.id),
-        )
+    def score(branch: CompanyBranch) -> tuple[int, int, int]:
+        postal_match = location_postal is not None and _normalized_postal(branch.postal_code) == location_postal
+        city_match = location_city is not None and _normalized(branch.city) == location_city
+        region_match = location_region is not None and _normalized(branch.region) == location_region
+        return (int(postal_match), int(city_match), int(region_match))
 
-    best = min(candidates, key=score)
-    geographic_match = any(value < 0 for value in score(best)[:4])
-    if geographic_match:
-        return best.id
+    best_score = max(score(branch) for branch in candidates)
+    if best_score != (0, 0, 0):
+        matches = [branch for branch in candidates if score(branch) == best_score]
+        return min(
+            matches,
+            key=lambda branch: (not branch.is_primary, branch.name.casefold(), str(branch.id)),
+        ).id
 
-    primary = next((branch for branch in candidates if branch.is_primary), None)
-    return (primary or best).id
-
-
+    primary_candidate = next((branch for branch in candidates if branch.is_primary), None)
+    fallback = primary_candidate or min(candidates, key=lambda branch: (branch.name.casefold(), str(branch.id)))
+    return fallback.id
 def add_order_event(
     db: Session,
     order: WorkOrder,
@@ -221,13 +215,13 @@ def generate_scheduled_occurrence(
     if occurrence_date > current_day:
         raise DomainError(409, "occurrence_not_due", "A future maintenance occurrence cannot be generated yet")
 
-    validate_context(
+    _, _, resolved_branch_id = validate_context(
         db, company_id, schedule.customer_id, schedule.service_location_id,
         schedule.branch_id, schedule.equipment_id, schedule.agreement_id, occurrence_date,
     )
     order = WorkOrder(
         company_id=company_id,
-        branch_id=schedule.branch_id,
+        branch_id=resolved_branch_id,
         customer_id=schedule.customer_id,
         service_location_id=schedule.service_location_id,
         equipment_id=schedule.equipment_id,
