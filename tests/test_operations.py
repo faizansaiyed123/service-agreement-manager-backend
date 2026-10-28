@@ -1,12 +1,13 @@
 from datetime import date
 
 
-def make_site(client, headers):
+def make_site(client, headers, *, city="Austin", region=None, postal_code=None):
     response = client.post("/api/v1/customers", headers=headers, json={"name": "Maintenance Customer"})
     assert response.status_code == 201, response.text
     customer = response.json()
     response = client.post(f"/api/v1/customers/{customer['id']}/service-locations", headers=headers, json={
-        "name": "Primary Site", "address_line1": "14 Service Lane", "city": "Austin",
+        "name": "Primary Site", "address_line1": "14 Service Lane", "city": city,
+        "region": region, "postal_code": postal_code,
     })
     assert response.status_code == 201, response.text
     return customer, response.json()
@@ -102,13 +103,7 @@ def test_automatic_branch_routing_prefers_service_location_match(client):
         "country_code": "US", "city": "Austin", "region": "TX", "postal_code": "78701",
     })
     assert branch.status_code == 201, branch.text
-    customer, location = make_site(client, headers)
-    update_location = client.patch(
-        f"/api/v1/customers/{customer["id"]}/service-locations/{location["id"]}",
-        headers=headers,
-        json={"postal_code": "78701", "region": "TX"},
-    )
-    assert update_location.status_code == 200, update_location.text
+    customer, location = make_site(client, headers, region="TX", postal_code="78701")
 
     order = client.post("/api/v1/work-orders", headers=headers, json={
         "customer_id": customer["id"], "service_location_id": location["id"],
