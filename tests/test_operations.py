@@ -1,7 +1,7 @@
 from datetime import date
 
 
-def make_site(client, headers, *, city="Austin", region=None, postal_code=None, country_code="US")
+def make_site(client, headers, *, city="Austin", region=None, postal_code=None, country_code="US"):
     response = client.post("/api/v1/customers", headers=headers, json={"name": "Maintenance Customer"})
     assert response.status_code == 201, response.text
     customer = response.json()
