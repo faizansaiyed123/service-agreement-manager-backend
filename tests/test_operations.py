@@ -89,3 +89,31 @@ def test_technician_assignment_start_and_checklist_completion(client):
     assert completed.status_code == 200, completed.text
     assert completed.json()["status"] == "completed"
     assert client.post(f"/api/v1/work-orders/{order_id}/cancel", headers=headers, json={"reason": "Too late"}).status_code == 409
+
+
+def test_automatic_branch_routing_prefers_service_location_match(client):
+    owner = client.post("/api/v1/auth/register", json={
+        "company_name": "Routing HVAC", "full_name": "Routing Owner",
+        "email": "routing-owner@example.com", "password": "correct-horse-battery-42",
+    }).json()
+    headers = {"Authorization": f"Bearer {owner["access_token"]}"}
+    branch = client.post("/api/v1/branches", headers=headers, json={
+        "name": "Austin Branch", "code": "AUS", "timezone": "America/Chicago",
+        "country_code": "US", "city": "Austin", "region": "TX", "postal_code": "78701",
+    })
+    assert branch.status_code == 201, branch.text
+    customer, location = make_site(client, headers)
+    update_location = client.patch(
+        f"/api/v1/customers/{customer["id"]}/service-locations/{location["id"]}",
+        headers=headers,
+        json={"postal_code": "78701", "region": "TX"},
+    )
+    assert update_location.status_code == 200, update_location.text
+
+    order = client.post("/api/v1/work-orders", headers=headers, json={
+        "customer_id": customer["id"], "service_location_id": location["id"],
+        "title": "Automatic routing check", "scheduled_for": date.today().isoformat(),
+        "priority": "normal",
+    })
+    assert order.status_code == 201, order.text
+    assert order.json()["branch_id"] == branch.json()["id"]
