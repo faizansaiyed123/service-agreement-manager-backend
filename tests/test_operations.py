@@ -1,16 +1,30 @@
 from datetime import date
 
 
-def make_site(client, headers, *, city="Austin", region=None, postal_code=None):
+def make_site(client, headers, *, city="Austin", region=None, postal_code=None, country_code="US")
     response = client.post("/api/v1/customers", headers=headers, json={"name": "Maintenance Customer"})
     assert response.status_code == 201, response.text
     customer = response.json()
     response = client.post(f"/api/v1/customers/{customer['id']}/service-locations", headers=headers, json={
         "name": "Primary Site", "address_line1": "14 Service Lane", "city": city,
-        "region": region, "postal_code": postal_code,
+        "region": region, "postal_code": postal_code, "country_code": country_code,
     })
     assert response.status_code == 201, response.text
     return customer, response.json()
+
+
+def make_branch(client, headers, *, name, code, city=None, region=None, postal_code=None, country_code="US"):
+    response = client.post("/api/v1/branches", headers=headers, json={
+        "name": name,
+        "code": code,
+        "timezone": "UTC",
+        "country_code": country_code,
+        "city": city,
+        "region": region,
+        "postal_code": postal_code,
+    })
+    assert response.status_code == 201, response.text
+    return response.json()
 
 
 def test_schedule_generation_is_idempotent_and_tenant_scoped(client):
@@ -97,7 +111,7 @@ def test_automatic_branch_routing_prefers_service_location_match(client):
         "company_name": "Routing HVAC", "full_name": "Routing Owner",
         "email": "routing-owner@example.com", "password": "correct-horse-battery-42",
     }).json()
-    headers = {"Authorization": f"Bearer {owner["access_token"]}"}
+    headers = {"Authorization": f"Bearer {owner['access_token']}"}
     branch = client.post("/api/v1/branches", headers=headers, json={
         "name": "Austin Branch", "code": "AUS", "timezone": "America/Chicago",
         "country_code": "US", "city": "Austin", "region": "TX", "postal_code": "78701",
@@ -112,3 +126,121 @@ def test_automatic_branch_routing_prefers_service_location_match(client):
     })
     assert order.status_code == 201, order.text
     assert order.json()["branch_id"] == branch.json()["id"]
+
+
+
+def test_automatic_branch_routing_prioritizes_postal_code_over_city(client):
+    owner = client.post("/api/v1/auth/register", json={
+        "company_name": "Postal Routing HVAC", "full_name": "Postal Routing Owner",
+        "email": "postal-routing-owner@example.com", "password": "correct-horse-battery-42",
+    }).json()
+    headers = {"Authorization": f"Bearer {owner['access_token']}"}
+    postal_branch = make_branch(
+        client, headers, name="Postal Match", code="POSTAL",
+        city="Dallas", region="TX", postal_code="78701",
+    )
+    make_branch(
+        client, headers, name="City Match", code="CITY",
+        city="Austin", region="TX", postal_code="73301",
+    )
+    customer, location = make_site(client, headers, city="Austin", region="TX", postal_code="78 701")
+    order = client.post("/api/v1/work-orders", headers=headers, json={
+        "customer_id": customer["id"], "service_location_id": location["id"],
+        "title": "Postal-code routing check", "scheduled_for": date.today().isoformat(),
+    })
+    assert order.status_code == 201, order.text
+    assert order.json()["branch_id"] == postal_branch["id"]
+
+
+def test_automatic_branch_routing_uses_region_when_no_postal_or_city_match(client):
+    owner = client.post("/api/v1/auth/register", json={
+        "company_name": "Regional Routing HVAC", "full_name": "Regional Routing Owner",
+        "email": "regional-routing-owner@example.com", "password": "correct-horse-battery-42",
+    }).json()
+    headers = {"Authorization": f"Bearer {owner['access_token']}"}
+    regional_branch = make_branch(
+        client, headers, name="Texas Regional Branch", code="TEXAS",
+        city="Houston", region="TX", postal_code="77001",
+    )
+    customer, location = make_site(client, headers, city="Austin", region="TX", postal_code="78701")
+    order = client.post("/api/v1/work-orders", headers=headers, json={
+        "customer_id": customer["id"], "service_location_id": location["id"],
+        "title": "Region-routing check", "scheduled_for": date.today().isoformat(),
+    })
+    assert order.status_code == 201, order.text
+    assert order.json()["branch_id"] == regional_branch["id"]
+
+
+def test_automatic_branch_routing_restricts_candidates_by_country_when_possible(client):
+    owner = client.post("/api/v1/auth/register", json={
+        "company_name": "Country Routing HVAC", "full_name": "Country Routing Owner",
+        "email": "country-routing-owner@example.com", "password": "correct-horse-battery-42",
+    }).json()
+    headers = {"Authorization": f"Bearer {owner['access_token']}"}
+    make_branch(
+        client, headers, name="US Postal Match", code="USPOST",
+        city="Chicago", region="IL", postal_code="M5V 2T6", country_code="US",
+    )
+    canadian_branch = make_branch(
+        client, headers, name="Toronto Branch", code="TORONTO",
+        city="Toronto", region="ON", postal_code="M4B 1B4", country_code="CA",
+    )
+    customer, location = make_site(
+        client, headers, city="Toronto", region="ON",
+        postal_code="M5V 2T6", country_code="CA",
+    )
+    order = client.post("/api/v1/work-orders", headers=headers, json={
+        "customer_id": customer["id"], "service_location_id": location["id"],
+        "title": "Country-aware routing check", "scheduled_for": date.today().isoformat(),
+    })
+    assert order.status_code == 201, order.text
+    assert order.json()["branch_id"] == canadian_branch["id"]
+
+
+def test_automatic_branch_routing_falls_back_to_primary_when_location_does_not_match(client):
+    owner = client.post("/api/v1/auth/register", json={
+        "company_name": "Fallback Routing HVAC", "full_name": "Fallback Routing Owner",
+        "email": "fallback-routing-owner@example.com", "password": "correct-horse-battery-42",
+    }).json()
+    headers = {"Authorization": f"Bearer {owner['access_token']}"}
+    branches = client.get("/api/v1/branches?active=true", headers=headers).json()
+    primary = next((branch for branch in branches if branch["is_primary"]), None)
+    assert primary is not None, "company registration should create a primary branch"
+    make_branch(
+        client, headers, name="Other Regional Branch", code="OTHER",
+        city="Denver", region="CO", postal_code="80202",
+    )
+    customer, location = make_site(client, headers, city="Phoenix", region="AZ", postal_code="85001")
+    order = client.post("/api/v1/work-orders", headers=headers, json={
+        "customer_id": customer["id"], "service_location_id": location["id"],
+        "title": "Primary fallback check", "scheduled_for": date.today().isoformat(),
+    })
+    assert order.status_code == 201, order.text
+    assert order.json()["branch_id"] == primary["id"]
+
+
+def test_automatic_routing_is_persisted_on_generated_maintenance_work_order(client):
+    owner = client.post("/api/v1/auth/register", json={
+        "company_name": "Scheduled Routing HVAC", "full_name": "Scheduled Routing Owner",
+        "email": "scheduled-routing-owner@example.com", "password": "correct-horse-battery-42",
+    }).json()
+    headers = {"Authorization": f"Bearer {owner['access_token']}"}
+    branch = make_branch(
+        client, headers, name="Austin Maintenance Branch", code="AUS-MAINT",
+        city="Austin", region="TX", postal_code="78701",
+    )
+    customer, location = make_site(client, headers, city="Austin", region="TX", postal_code="78701")
+    schedule = client.post("/api/v1/maintenance/schedules", headers=headers, json={
+        "customer_id": customer["id"], "service_location_id": location["id"],
+        "name": "Automatically routed monthly maintenance", "frequency": "monthly",
+        "next_due_date": date.today().isoformat(), "checklist_template": ["Inspect equipment"],
+    })
+    assert schedule.status_code == 201, schedule.text
+    assert schedule.json()["branch_id"] == branch["id"]
+    order = client.post(
+        f"/api/v1/maintenance/schedules/{schedule.json()['id']}/generate",
+        headers=headers,
+        json={"occurrence_date": date.today().isoformat()},
+    )
+    assert order.status_code == 201, order.text
+    assert order.json()["branch_id"] == branch["id"]
