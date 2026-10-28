@@ -25,6 +25,8 @@ jobs:
       DATABASE_URL: postgresql+psycopg://sam:sam_test_password@localhost:5432/service_agreements
       APP_ENV: test
       JWT_SECRET_KEY: test-secret-with-more-than-32-characters-long
+      WEBHOOK_ENCRYPTION_KEY: test-webhook-encryption-key-with-more-than-32-characters-long
+      NOTIFICATION_ENCRYPTION_KEY: test-notification-encryption-key-with-more-than-32-characters-long
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
