@@ -165,6 +165,24 @@ class PaymentRead(ORMModel):
     reference: str | None
     received_at: datetime
     notes: str | None
+    stripe_payment_intent_id: str | None = None
+    stripe_status: str | None = None
+
+
+class StripePaymentIntentRequest(BaseModel):
+    idempotency_key: str = Field(min_length=8, max_length=128)
+
+
+class StripePaymentConfirmRequest(BaseModel):
+    payment_intent_id: str = Field(min_length=1, max_length=255)
+    idempotency_key: str = Field(min_length=8, max_length=128)
+
+
+class StripePaymentIntentRead(BaseModel):
+    payment_intent_id: str
+    client_secret: str
+    amount: str
+    currency: str
 
 
 class InvoiceEventRead(ORMModel):

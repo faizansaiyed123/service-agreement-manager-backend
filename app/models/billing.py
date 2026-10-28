@@ -70,6 +70,8 @@ class Payment(Base, UUIDPrimaryKey):
     request_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text)
+    stripe_payment_intent_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    stripe_status: Mapped[str | None] = mapped_column(String(32))
 
 
 class PaymentRefund(Base, UUIDPrimaryKey):

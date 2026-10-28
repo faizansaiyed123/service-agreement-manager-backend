@@ -4,14 +4,14 @@ from datetime import UTC, date, datetime
 from decimal import Decimal, ROUND_HALF_UP
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Query, Response
+from fastapi import APIRouter, Depends, Header, Query, Request, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_user, require_roles
-from app.schemas.billing import InvoiceBaseRead, InvoiceCreate, InvoiceCreditCreate, InvoiceCreditRead, InvoiceEventRead, InvoiceLineInput, InvoiceRead, InvoiceUpdate, PaymentCreate, PaymentRead, PaymentRefundCreate, PaymentRefundRead, VoidInvoice
+from app.schemas.billing import InvoiceBaseRead, InvoiceCreate, InvoiceCreditCreate, InvoiceCreditRead, InvoiceEventRead, InvoiceLineInput, InvoiceRead, InvoiceUpdate, PaymentCreate, PaymentRead, PaymentRefundCreate, PaymentRefundRead, StripePaymentConfirmRequest, StripePaymentIntentRead, StripePaymentIntentRequest, VoidInvoice
 from app.core.errors import DomainError
 from app.db.session import get_db
 from app.webhook_service import publish_webhook_event
@@ -548,3 +548,55 @@ def list_invoice_credits(
     return list(db.scalars(select(InvoiceCredit).where(
         InvoiceCredit.invoice_id == invoice.id
     ).order_by(InvoiceCredit.created_at, InvoiceCredit.id)).all())
+
+
+@router.post("/{invoice_id}/stripe-payment-intent")
+def create_stripe_payment_intent(
+    invoice_id: UUID,
+    payload: StripePaymentIntentRequest,
+    user: User = Depends(require_roles(*INVOICE_ISSUE_ROLES)),
+    db: Session = Depends(get_db),
+):
+    from app.services.stripe_service import create_payment_intent, stripe_enabled
+    if not stripe_enabled():
+        raise DomainError(503, "stripe_not_configured", "Stripe online payments are not configured")
+    invoice = get_invoice(db, user.company_id, invoice_id)
+    if invoice.status not in {"issued", "partially_paid"}:
+        raise DomainError(409, "invoice_not_payable", "Only issued invoices with outstanding balances can accept payments")
+    return create_payment_intent(invoice, idempotency_key=payload.idempotency_key)
+
+
+@router.post("/{invoice_id}/stripe-confirm", response_model=PaymentRead, status_code=201)
+def confirm_stripe_payment(
+    invoice_id: UUID,
+    payload: StripePaymentConfirmRequest,
+    response: Response,
+    user: User = Depends(require_roles(*INVOICE_ISSUE_ROLES)),
+    db: Session = Depends(get_db),
+):
+    from app.services.stripe_service import record_stripe_payment
+    invoice = get_invoice(db, user.company_id, invoice_id, lock=True)
+    if invoice.status not in {"issued", "partially_paid"}:
+        raise DomainError(409, "invoice_not_payable", "Only issued invoices with outstanding balances can accept payments")
+    payment = record_stripe_payment(db, invoice, payload.payment_intent_id, idempotency_key=payload.idempotency_key)
+    response.status_code = 200
+    return payment
+
+
+@router.post("/stripe/webhook")
+async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
+    from app.services.stripe_service import verify_webhook_signature, record_stripe_payment
+    body = await request.body()
+    sig_header = request.headers.get("stripe-signature", "")
+    event = verify_webhook_signature(body, sig_header)
+    event_type = event.get("type", "")
+    if event_type == "payment_intent.succeeded":
+        intent = event.get("data", {}).get("object", {})
+        intent_id = intent.get("id")
+        invoice_id = intent.get("metadata", {}).get("invoice_id")
+        if intent_id and invoice_id:
+            invoice = db.scalar(select(Invoice).where(Invoice.id == invoice_id))
+            if invoice:
+                idemp = f"stripe:{intent_id}"
+                record_stripe_payment(db, invoice, intent_id, idempotency_key=idemp)
+    return {"received": True, "type": event_type}

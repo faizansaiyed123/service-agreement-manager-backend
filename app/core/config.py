@@ -14,9 +14,9 @@ class Settings(BaseSettings):
     app_env: str = "development"
     debug: bool = False
     api_v1_prefix: str = "/api/v1"
-    database_url: str = "postgresql+psycopg://sam:sam_dev_only@localhost:5432/service_agreements"
+    database_url: str = Field(..., description="PostgreSQL connection URL")
     postgres_password: SecretStr | None = None
-    jwt_secret_key: str = "unsafe-development-secret-change-this-please"
+    jwt_secret_key: str = Field(..., min_length=32, description="JWT signing secret (min 32 chars)")
     access_token_minutes: int = 15
     refresh_token_days: int = 14
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:3000", "http://localhost:5173"]
@@ -48,8 +48,8 @@ class Settings(BaseSettings):
     storage_endpoint_url: str | None = None
     storage_access_key_id: str | None = None
     storage_secret_access_key: str | None = None
-    webhook_encryption_key: str = "unsafe-development-webhook-key-change-this"
-    notification_encryption_key: str = "unsafe-development-notification-key-change-this"
+webhook_encryption_key: str = Field(..., min_length=32, description="Webhook payload encryption key")
+    notification_encryption_key: str = Field(..., min_length=32, description="Notification payload encryption key")
     webhook_poll_seconds: int = Field(default=5, ge=1, le=300)
     webhook_lease_seconds: int = Field(default=60, ge=5, le=3600)
     webhook_default_max_attempts: int = Field(default=8, ge=1, le=20)
@@ -62,6 +62,10 @@ class Settings(BaseSettings):
     sms_lease_seconds: int = Field(default=60, ge=5, le=3600)
     sms_default_max_attempts: int = Field(default=5, ge=1, le=10)
     billing_poll_seconds: int = Field(default=60, ge=5, le=3600)
+    stripe_enabled: bool = False
+    stripe_secret_key: str | None = None
+    stripe_publishable_key: str | None = None
+    stripe_webhook_secret: str | None = None
 
     @field_validator("cors_origins", mode="before")
     @classmethod
