@@ -30,11 +30,7 @@ def validate_context(
         raise DomainError(404, "customer_not_found", "Active customer not found")
     branch = None
     if branch_id is None:
-        branch = db.scalar(select(CompanyBranch.id).where(
-            CompanyBranch.company_id == company_id,
-            CompanyBranch.is_primary.is_(True),
-            CompanyBranch.is_active.is_(True),
-        ))
+        branch = resolve_branch_id(db, company_id, location_id)
     else:
         branch = db.scalar(select(CompanyBranch.id).where(
             CompanyBranch.id == branch_id,
@@ -75,6 +71,73 @@ def validate_context(
         if for_date is not None and not (agreement.start_date <= for_date <= agreement.end_date):
             raise DomainError(409, "agreement_out_of_term", "The scheduled date is outside the agreement term")
     return customer, location, branch
+
+
+def _normalized(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().casefold()
+    return normalized or None
+
+
+def resolve_branch_id(db: Session, company_id: UUID, location_id: UUID) -> UUID | None:
+    """Select the best active branch for a service location.
+
+    Routing is deterministic and uses progressively broader geographic matches:
+    exact postal code, then city, then region, then country. A primary branch is
+    the final fallback when no geographic match exists. Explicit branch selection
+    bypasses this resolver.
+
+    The query loads active branches once, so routing is O(B) in the number of
+    active branches with no per-branch database queries.
+    """
+    location = db.scalar(select(ServiceLocation).where(
+        ServiceLocation.id == location_id,
+        ServiceLocation.company_id == company_id,
+    ))
+    if location is None:
+        raise DomainError(404, "service_location_not_found", "Service location not found")
+
+    branches = list(db.scalars(select(CompanyBranch).where(
+        CompanyBranch.company_id == company_id,
+        CompanyBranch.is_active.is_(True),
+    )).all())
+    if not branches:
+        return None
+
+    location_country = _normalized(location.country_code)
+    location_postal = _normalized(location.postal_code)
+    location_city = _normalized(location.city)
+    location_region = _normalized(location.region)
+
+    same_country = [
+        branch for branch in branches
+        if not location_country or _normalized(branch.country_code) == location_country
+    ]
+    candidates = same_country or branches
+
+    def score(branch: CompanyBranch) -> tuple[int, int, int, int, int, str, str]:
+        postal = location_postal and _normalized(branch.postal_code) == location_postal
+        city = location_city and _normalized(branch.city) == location_city
+        region = location_region and _normalized(branch.region) == location_region
+        country = location_country and _normalized(branch.country_code) == location_country
+        return (
+            1 if postal else 0,
+            1 if city else 0,
+            1 if region else 0,
+            1 if country else 0,
+            1 if branch.is_primary else 0,
+            branch.name.casefold(),
+            str(branch.id),
+        )
+
+    best = max(candidates, key=score)
+    geographic_match = any(score(best)[:4])
+    if geographic_match:
+        return best.id
+
+    primary = next((branch for branch in candidates if branch.is_primary), None)
+    return (primary or best).id
 
 
 def add_order_event(
