@@ -122,17 +122,17 @@ def resolve_branch_id(db: Session, company_id: UUID, location_id: UUID) -> UUID 
         region = location_region and _normalized(branch.region) == location_region
         country = location_country and _normalized(branch.country_code) == location_country
         return (
-            1 if postal else 0,
-            1 if city else 0,
-            1 if region else 0,
-            1 if country else 0,
-            1 if branch.is_primary else 0,
+            -1 if postal else 0,
+            -1 if city else 0,
+            -1 if region else 0,
+            -1 if country else 0,
+            0 if branch.is_primary else 1,
             branch.name.casefold(),
             str(branch.id),
         )
 
-    best = max(candidates, key=score)
-    geographic_match = any(score(best)[:4])
+    best = min(candidates, key=score)
+    geographic_match = any(value < 0 for value in score(best)[:4])
     if geographic_match:
         return best.id
 
