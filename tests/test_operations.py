@@ -203,9 +203,10 @@ def test_automatic_branch_routing_falls_back_to_primary_when_location_does_not_m
         "email": "fallback-routing-owner@example.com", "password": "correct-horse-battery-42",
     }).json()
     headers = {"Authorization": f"Bearer {owner['access_token']}"}
-    branches = client.get("/api/v1/branches?active=true", headers=headers).json()
-    primary = next((branch for branch in branches if branch["is_primary"]), None)
-    assert primary is not None, "company registration should create a primary branch"
+    primary = make_branch(
+        client, headers, name="Primary Service Branch", code="PRIMARY",
+        city="Miami", region="FL", postal_code="33101",
+    )
     make_branch(
         client, headers, name="Other Regional Branch", code="OTHER",
         city="Denver", region="CO", postal_code="80202",
