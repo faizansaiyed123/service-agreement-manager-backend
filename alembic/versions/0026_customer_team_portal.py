@@ -65,14 +65,14 @@ def upgrade() -> None:
     op.create_table(
         "customer_portal_identities",
         sa.Column("id", sa.Uuid(), primary_key=True, nullable=False),
-        sa.Column("email", sa.String(length=320), nullable=False, unique=True),
+        sa.Column("email", sa.String(length=320), nullable=False),
         sa.Column("full_name", sa.String(length=160), nullable=False),
         sa.Column("password_hash", sa.String(length=255), nullable=False),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
     )
-    op.create_index("ix_customer_portal_identities_email", "customer_portal_identities", ["email"])
+    op.create_index("ix_customer_portal_identities_email", "customer_portal_identities", ["email"], unique=True)
 
     op.create_table(
         "customer_portal_sessions",
