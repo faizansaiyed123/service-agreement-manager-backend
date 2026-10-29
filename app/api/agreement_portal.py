@@ -33,6 +33,10 @@ def now_utc() -> datetime:
     return datetime.now(UTC)
 
 
+def utc_datetime(value: datetime) -> datetime:
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
 def iso(value: datetime | None) -> str | None:
     if value is None:
         return None
@@ -239,7 +243,7 @@ def send_agreement(
                 recipient_name=existing.recipient_name,
                 recipient_email=existing.recipient_email,
                 agreement_version=existing.agreement_version,
-                expires_at=existing.expires_at.astimezone(UTC).isoformat(),
+                expires_at=iso(existing.expires_at),
             )
 
     db.execute(
