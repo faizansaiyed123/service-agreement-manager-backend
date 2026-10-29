@@ -63,7 +63,7 @@ def test_customer_acceptance_is_automatic_and_idempotent(client):
     assert public.json()["portal_status"] == "pending"
     assert public.json()["agreement_number"] == agreement["agreement_number"]
 
-    accepted = client.post(f"/api/v1/agreement-portal/public/{token}/respond", json={"decision": "accept"})
+    accepted = client.post(f"/api/v1/agreement-portal/public/{token}/respond", json={"decision": "accept", "acceptance_confirmation": True})
     assert accepted.status_code == 200, accepted.text
     assert accepted.json()["portal_status"] == "accepted"
     assert accepted.json()["accepted_at"]
