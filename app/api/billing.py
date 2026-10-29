@@ -250,7 +250,7 @@ def list_invoices(
 @router.get("/{invoice_id}/pdf", response_class=StreamingResponse)
 def invoice_pdf(
     invoice_id: UUID,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_roles(*INVOICE_EDIT_ROLES)),
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
     invoice = get_invoice(db, user.company_id, invoice_id)
@@ -264,7 +264,7 @@ def invoice_pdf(
 
 
 @router.get("/{invoice_id}", response_model=InvoiceRead)
-def read_invoice(invoice_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> InvoiceRead:
+def read_invoice(invoice_id: UUID, user: User = Depends(require_roles(*INVOICE_EDIT_ROLES)), db: Session = Depends(get_db)) -> InvoiceRead:
     invoice = get_invoice(db, user.company_id, invoice_id)
     return invoice_response(db, invoice)
 
@@ -392,7 +392,7 @@ def record_payment(
 
 
 @router.get("/{invoice_id}/payments", response_model=list[PaymentRead])
-def list_payments(invoice_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> list[Payment]:
+def list_payments(invoice_id: UUID, user: User = Depends(require_roles(*INVOICE_EDIT_ROLES)), db: Session = Depends(get_db)) -> list[Payment]:
     invoice = get_invoice(db, user.company_id, invoice_id)
     return list(db.scalars(select(Payment).where(
         Payment.company_id == user.company_id, Payment.invoice_id == invoice.id
@@ -400,7 +400,7 @@ def list_payments(invoice_id: UUID, user: User = Depends(get_current_user), db: 
 
 
 @router.get("/{invoice_id}/events", response_model=list[InvoiceEventRead])
-def list_invoice_events(invoice_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> list[InvoiceEvent]:
+def list_invoice_events(invoice_id: UUID, user: User = Depends(require_roles(*INVOICE_EDIT_ROLES)), db: Session = Depends(get_db)) -> list[InvoiceEvent]:
     invoice = get_invoice(db, user.company_id, invoice_id)
     return list(db.scalars(select(InvoiceEvent).where(InvoiceEvent.invoice_id == invoice.id).order_by(
         InvoiceEvent.created_at, InvoiceEvent.id
@@ -479,7 +479,7 @@ def refund_payment(
 def list_payment_refunds(
     invoice_id: UUID,
     payment_id: UUID,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_roles(*INVOICE_EDIT_ROLES)),
     db: Session = Depends(get_db),
 ) -> list[PaymentRefund]:
     invoice = get_invoice(db, user.company_id, invoice_id)
@@ -541,7 +541,7 @@ def create_invoice_credit(
 @router.get("/{invoice_id}/credits", response_model=list[InvoiceCreditRead])
 def list_invoice_credits(
     invoice_id: UUID,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_roles(*INVOICE_EDIT_ROLES)),
     db: Session = Depends(get_db),
 ) -> list[InvoiceCredit]:
     invoice = get_invoice(db, user.company_id, invoice_id)

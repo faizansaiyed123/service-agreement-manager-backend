@@ -2,7 +2,7 @@ from datetime import date, datetime
 from uuid import UUID
 
 from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, JSON, String, Text, UniqueConstraint, Uuid, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.models.base import Timestamped, UUIDPrimaryKey
@@ -64,6 +64,40 @@ class WorkOrder(Base, UUIDPrimaryKey, Timestamped):
     checklist_results: Mapped[dict | None] = mapped_column(JSON)
     customer_signoff_name: Mapped[str | None] = mapped_column(String(160))
     cancellation_reason: Mapped[str | None] = mapped_column(Text)
+
+    customer: Mapped["Customer"] = relationship("Customer", lazy="select")
+    service_location: Mapped["ServiceLocation"] = relationship("ServiceLocation", lazy="select")
+
+    @property
+    def customer_name(self) -> str | None:
+        return self.customer.name if self.customer is not None else None
+
+    @property
+    def customer_phone(self) -> str | None:
+        return self.customer.phone if self.customer is not None else None
+
+    @property
+    def service_location_name(self) -> str | None:
+        return self.service_location.name if self.service_location is not None else None
+
+    @property
+    def service_location_address(self) -> str | None:
+        location = self.service_location
+        if location is None:
+            return None
+        parts = (
+            location.address_line1,
+            location.address_line2,
+            location.city,
+            location.region,
+            location.postal_code,
+            location.country_code,
+        )
+        return ", ".join(part.strip() for part in parts if part and part.strip())
+
+    @property
+    def access_instructions(self) -> str | None:
+        return self.service_location.access_instructions if self.service_location is not None else None
 
 
 class WorkOrderEvent(Base, UUIDPrimaryKey):

@@ -166,7 +166,7 @@ def invoice_portal_view(
         balance_due=str(summary.balance_due),
         notes=invoice.notes,
         expires_at=iso(token.expires_at) or "",
-        portal_status="paid" if summary.balance_due <= Decimal("0.00") else "payable",
+        portal_status="paid" if token.status == "paid" or summary.balance_due <= Decimal("0.00") else "payable",
         lines=[
             {
                 "service_code": line.service_code,
@@ -292,7 +292,12 @@ def send_invoice_portal(
         now - utc_datetime(existing.sent_at)
     ).total_seconds() < settings.invoice_portal_send_cooldown_seconds:
         notification = db.get(NotificationOutbox, existing.notification_id) if existing.notification_id else None
-        if notification is not None and notification.status != "dead":
+        same_recipient = (
+            existing.recipient_email == str(recipient_email).lower()
+            and existing.recipient_name == recipient_name.strip()
+        )
+        same_balance = str((notification.payload or {}).get("balance_due")) == str(summary.balance_due) if notification else False
+        if notification is not None and notification.status != "dead" and same_recipient and same_balance:
             return InvoicePortalSendRead(
                 notification_id=notification.id,
                 notification_status=notification.status,
@@ -410,9 +415,13 @@ def get_public_invoice(
             token.status = "paid"
             token.used_at = now_utc()
     elif token.status == "paid":
-        # A later refund can reopen the balance, but the already-paid link is not
-        # reactivated. The admin must send a fresh link for the remaining balance.
-        pass
+        # A later refund can reopen the balance, but this spent link must not become
+        # payable again. The admin must send a fresh link for the remaining balance.
+        raise DomainError(
+            410,
+            "invoice_link_balance_changed",
+            "This invoice balance changed after the payment link was used. Contact the service provider for a new link.",
+        )
     elif invoice.status not in {"issued", "partially_paid"}:
         token.status = "revoked"
         token.used_at = now_utc()

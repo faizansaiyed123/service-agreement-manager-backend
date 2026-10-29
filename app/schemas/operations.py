@@ -155,6 +155,11 @@ class WorkOrderRead(ORMModel):
     checklist_results: dict | None
     customer_signoff_name: str | None
     cancellation_reason: str | None
+    customer_name: str | None = None
+    customer_phone: str | None = None
+    service_location_name: str | None = None
+    service_location_address: str | None = None
+    access_instructions: str | None = None
     created_at: datetime
     updated_at: datetime
 

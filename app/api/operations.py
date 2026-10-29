@@ -3,7 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_user, require_roles
 from app.core.errors import DomainError
@@ -27,7 +27,14 @@ def scoped_schedule(db: Session, company_id: UUID, schedule_id: UUID) -> Mainten
 
 
 def scoped_order(db: Session, company_id: UUID, order_id: UUID) -> WorkOrder:
-    obj = db.scalar(select(WorkOrder).where(WorkOrder.id == order_id, WorkOrder.company_id == company_id))
+    obj = db.scalar(
+        select(WorkOrder)
+        .options(
+            selectinload(WorkOrder.customer),
+            selectinload(WorkOrder.service_location),
+        )
+        .where(WorkOrder.id == order_id, WorkOrder.company_id == company_id)
+    )
     if obj is None:
         raise DomainError(404, "work_order_not_found", "Work order not found")
     return obj
@@ -153,7 +160,10 @@ def list_work_orders(
 ) -> list[WorkOrder]:
     if scheduled_from and scheduled_to and scheduled_to < scheduled_from:
         raise DomainError(422, "invalid_date_range", "scheduled_to must be on or after scheduled_from")
-    stmt = select(WorkOrder).where(WorkOrder.company_id == user.company_id)
+    stmt = select(WorkOrder).options(
+        selectinload(WorkOrder.customer),
+        selectinload(WorkOrder.service_location),
+    ).where(WorkOrder.company_id == user.company_id)
     if user.role == "technician":
         stmt = stmt.where(WorkOrder.assigned_to_user_id == user.id)
     if status:

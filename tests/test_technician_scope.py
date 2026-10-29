@@ -78,6 +78,10 @@ def test_technician_can_only_list_and_open_assigned_work_orders(client):
     listed = client.get("/api/v1/work-orders?limit=100", headers=tech_headers)
     assert listed.status_code == 200, listed.text
     assert [item["id"] for item in listed.json()] == [order_a.json()["id"]]
+    assigned = listed.json()[0]
+    assert assigned["customer_name"] == "Customer A"
+    assert assigned["service_location_name"] == "Primary Site"
+    assert "14 Service Lane" in assigned["service_location_address"]
     assert client.get("/api/v1/work-orders/{}".format(order_a.json()["id"]), headers=tech_headers).status_code == 200
     assert client.get("/api/v1/work-orders/{}".format(order_b.json()["id"]), headers=tech_headers).status_code == 404
     assert client.get("/api/v1/work-orders/{}/events".format(order_b.json()["id"]), headers=tech_headers).status_code == 404
