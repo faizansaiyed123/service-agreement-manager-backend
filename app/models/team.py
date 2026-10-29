@@ -18,7 +18,7 @@ class TeamInvitation(Base, UUIDPrimaryKey, Timestamped):
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     branch_ids: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     skills: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
-    status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(16), default="pending", server_default="pending", nullable=False, index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

@@ -83,6 +83,8 @@ jobs:
           EMAIL_VERIFICATION_URL=https://app.example.com/verify-email
           AGREEMENT_PORTAL_URL=https://app.example.com/agreement
           INVOICE_PORTAL_URL=https://app.example.com/invoice
+          TEAM_INVITATION_URL=https://app.example.com/team/invitation
+          CUSTOMER_PORTAL_INVITATION_URL=https://app.example.com/customer-portal/invitation
           STORAGE_BACKEND=local
           STORAGE_ROOT=/srv/app/storage
           WEBHOOK_ENCRYPTION_KEY=ci-only-webhook-encryption-key-1234567890abcdef

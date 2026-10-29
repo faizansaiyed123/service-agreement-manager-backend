@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.deps import get_current_user, require_roles
 from app.core.errors import DomainError
 from app.db.session import get_db
-from app.models import MaintenanceSchedule, TechnicianBranchMembership, TechnicianSkill, User, WorkOrder, WorkOrderEvent
+from app.models import CompanyBranch, MaintenanceSchedule, TechnicianBranchMembership, TechnicianSkill, User, WorkOrder, WorkOrderEvent
 from app.services.maintenance import add_order_event, create_work_order_number, generate_scheduled_occurrence, validate_context
 from app.schemas.operations import AssignTechnician, CancelWorkOrder, GenerateOccurrence, ScheduleCreate, ScheduleRead, ScheduleUpdate, WorkOrderCompletion, WorkOrderCreate, WorkOrderEventRead, WorkOrderRead, WorkOrderUpdate
 
@@ -230,10 +230,16 @@ def assign_technician(
     ))
     if tech is None:
         raise DomainError(404, "technician_not_found", "Active technician not found in this company")
-    assigned_branches = set(db.scalars(select(TechnicianBranchMembership.branch_id).where(
-        TechnicianBranchMembership.company_id == user.company_id,
-        TechnicianBranchMembership.user_id == tech.id,
-    )).all())
+    assigned_branches = set(db.scalars(
+        select(TechnicianBranchMembership.branch_id)
+        .join(CompanyBranch, CompanyBranch.id == TechnicianBranchMembership.branch_id)
+        .where(
+            TechnicianBranchMembership.company_id == user.company_id,
+            TechnicianBranchMembership.user_id == tech.id,
+            CompanyBranch.company_id == user.company_id,
+            CompanyBranch.is_active.is_(True),
+        )
+    ).all())
     if tech.branch_scope_enabled and (not assigned_branches or order.branch_id is None or order.branch_id not in assigned_branches):
         raise DomainError(409, "technician_branch_mismatch", "This technician is not assigned to the work order's branch")
     if order.required_skill:
