@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.deps import get_current_user, require_roles
+from app.api.deps import require_roles
 from app.schemas.billing import InvoiceBaseRead, InvoiceCreate, InvoiceCreditCreate, InvoiceCreditRead, InvoiceEventRead, InvoiceLineInput, InvoiceRead, InvoiceUpdate, PaymentCreate, PaymentRead, PaymentRefundCreate, PaymentRefundRead, StripePaymentConfirmRequest, StripePaymentIntentRequest, VoidInvoice
 from app.core.errors import DomainError
 from app.db.session import get_db
@@ -231,7 +231,7 @@ def list_invoices(
     due_through: date | None = None,
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_roles(*INVOICE_EDIT_ROLES)),
     db: Session = Depends(get_db),
 ) -> list[InvoiceRead]:
     stmt = select(Invoice).options(selectinload(Invoice.lines)).where(Invoice.company_id == user.company_id)
@@ -560,10 +560,17 @@ def create_stripe_payment_intent(
     from app.services.stripe_service import create_payment_intent, stripe_enabled
     if not stripe_enabled():
         raise DomainError(503, "stripe_not_configured", "Stripe online payments are not configured")
-    invoice = get_invoice(db, user.company_id, invoice_id)
+    invoice = get_invoice(db, user.company_id, invoice_id, lock=True)
     if invoice.status not in {"issued", "partially_paid"}:
         raise DomainError(409, "invoice_not_payable", "Only issued invoices with outstanding balances can accept payments")
-    return create_payment_intent(invoice, idempotency_key=payload.idempotency_key)
+    balance_due = invoice_response(db, invoice).balance_due
+    if balance_due <= Decimal("0.00"):
+        raise DomainError(409, "invoice_balance_zero", "This invoice has no outstanding balance")
+    return create_payment_intent(
+        invoice,
+        amount_due=balance_due,
+        idempotency_key=payload.idempotency_key,
+    )
 
 
 @router.post("/{invoice_id}/stripe-confirm", response_model=PaymentRead, status_code=201)
@@ -595,8 +602,15 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
         intent_id = intent.get("id")
         invoice_id = intent.get("metadata", {}).get("invoice_id")
         if intent_id and invoice_id:
-            invoice = db.scalar(select(Invoice).where(Invoice.id == invoice_id))
+            invoice = db.scalar(
+                select(Invoice)
+                .where(
+                    Invoice.id == invoice_id,
+                    Invoice.company_id == (intent.get("metadata", {}) or {}).get("company_id"),
+                )
+                .with_for_update()
+            )
             if invoice:
                 idemp = f"stripe:{intent_id}"
-                record_stripe_payment(db, invoice, intent_id, idempotency_key=idemp)
+                record_stripe_payment(db, invoice, intent_id, idempotency_key=idemp, intent_data=intent)
     return {"received": True, "type": event_type}

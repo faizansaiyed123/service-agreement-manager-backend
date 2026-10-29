@@ -55,6 +55,12 @@ def list_schedules(
     user: User = Depends(get_current_user), db: Session = Depends(get_db),
 ) -> list[MaintenanceSchedule]:
     stmt = select(MaintenanceSchedule).where(MaintenanceSchedule.company_id == user.company_id)
+    if user.role == "technician":
+        assigned_schedules = select(WorkOrder.maintenance_schedule_id).where(
+            WorkOrder.assigned_to_user_id == user.id,
+            WorkOrder.maintenance_schedule_id.is_not(None),
+        )
+        stmt = stmt.where(MaintenanceSchedule.id.in_(assigned_schedules))
     if active is not None:
         stmt = stmt.where(MaintenanceSchedule.is_active.is_(active))
     if due_through:
@@ -64,7 +70,16 @@ def list_schedules(
 
 @schedules_router.get("/{schedule_id}", response_model=ScheduleRead)
 def get_schedule(schedule_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> MaintenanceSchedule:
-    return scoped_schedule(db, user.company_id, schedule_id)
+    schedule = scoped_schedule(db, user.company_id, schedule_id)
+    if user.role == "technician":
+        assigned_order = db.scalar(select(WorkOrder.id).where(
+            WorkOrder.company_id == user.company_id,
+            WorkOrder.maintenance_schedule_id == schedule.id,
+            WorkOrder.assigned_to_user_id == user.id,
+        ))
+        if assigned_order is None:
+            raise DomainError(404, "schedule_not_found", "Maintenance schedule not found")
+    return schedule
 
 
 @schedules_router.patch("/{schedule_id}", response_model=ScheduleRead)
@@ -139,6 +154,8 @@ def list_work_orders(
     if scheduled_from and scheduled_to and scheduled_to < scheduled_from:
         raise DomainError(422, "invalid_date_range", "scheduled_to must be on or after scheduled_from")
     stmt = select(WorkOrder).where(WorkOrder.company_id == user.company_id)
+    if user.role == "technician":
+        stmt = stmt.where(WorkOrder.assigned_to_user_id == user.id)
     if status:
         stmt = stmt.where(WorkOrder.status == status)
     if customer_id:
@@ -154,7 +171,10 @@ def list_work_orders(
 
 @work_orders_router.get("/{order_id}", response_model=WorkOrderRead)
 def get_work_order(order_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> WorkOrder:
-    return scoped_order(db, user.company_id, order_id)
+    order = scoped_order(db, user.company_id, order_id)
+    if user.role == "technician" and order.assigned_to_user_id != user.id:
+        raise DomainError(404, "work_order_not_found", "Work order not found")
+    return order
 
 
 @work_orders_router.patch("/{order_id}", response_model=WorkOrderRead)
@@ -279,7 +299,9 @@ def cancel_work_order(
 
 @work_orders_router.get("/{order_id}/events", response_model=list[WorkOrderEventRead])
 def list_work_order_events(order_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> list[WorkOrderEvent]:
-    scoped_order(db, user.company_id, order_id)
+    order = scoped_order(db, user.company_id, order_id)
+    if user.role == "technician" and order.assigned_to_user_id != user.id:
+        raise DomainError(404, "work_order_not_found", "Work order not found")
     return list(db.scalars(select(WorkOrderEvent).join(WorkOrder).where(
         WorkOrderEvent.work_order_id == order_id, WorkOrder.company_id == user.company_id
     ).order_by(WorkOrderEvent.created_at, WorkOrderEvent.id)).all())
