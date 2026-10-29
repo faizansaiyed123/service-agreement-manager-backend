@@ -3,7 +3,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0028_attachment_customer_visibility"
+revision = "0028_attachment_visibility"
 down_revision = "0027_technician_branch_scope"
 branch_labels = None
 depends_on = None
