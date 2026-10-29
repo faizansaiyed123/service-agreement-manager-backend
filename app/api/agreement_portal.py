@@ -5,7 +5,7 @@ from decimal import Decimal
 from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session, selectinload
 
@@ -329,7 +329,11 @@ def send_agreement(
 
 
 @router.get("/public/{raw_token}", response_model=AgreementPortalRead)
-def get_public_agreement(raw_token: str, request: Request, db: Session = Depends(get_db)) -> AgreementPortalRead:
+def get_public_agreement(raw_token: str, request: Request, response: Response, db: Session = Depends(get_db)) -> AgreementPortalRead:
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive"
     token, agreement, company, customer, location, _ = require_pending_token(db, raw_token, request)
     if token.status == "pending":
         if agreement.status != "proposed" or agreement.version_number != token.agreement_version:
@@ -347,8 +351,13 @@ def respond_to_public_agreement(
     raw_token: str,
     payload: AgreementPortalResponse,
     request: Request,
+    response: Response,
     db: Session = Depends(get_db),
 ) -> AgreementPortalRead:
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive"
     token, agreement, company, customer, location, token_hash = require_pending_token(
         db, raw_token, request, for_update=False
     )
