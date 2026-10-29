@@ -18,7 +18,7 @@ from app.core.security import create_token, hash_password
 from app.db.session import get_db
 from app.models import (
     AuthSession, Company, CompanyBranch, NotificationOutbox, TeamInvitation,
-    TechnicianBranchMembership, TechnicianSkill, User,
+    TechnicianBranchMembership, TechnicianSkill, User, WorkOrder,
 )
 from app.schemas.common import AuthenticatedSession, TokenPair
 from app.schemas.team import (
@@ -303,6 +303,19 @@ def update_technician_profile(
     )).all()}
     if valid_ids != selected:
         raise DomainError(422, "invalid_branch_selection", "Choose at least one active branch belonging to this company")
+
+    selected_branch_ids = {UUID(item) for item in selected}
+    selected_skills = {" ".join(skill.split()).casefold() for skill in payload.skills}
+    active_orders = list(db.scalars(select(WorkOrder).where(
+        WorkOrder.company_id == user.company_id,
+        WorkOrder.assigned_to_user_id == technician.id,
+        WorkOrder.status.in_(("assigned", "in_progress")),
+    ).with_for_update()).all())
+    for order in active_orders:
+        if order.branch_id is not None and order.branch_id not in selected_branch_ids:
+            raise DomainError(409, "technician_has_active_work_at_branch", "Reassign active work orders before removing a technician's branch access")
+        if order.required_skill and " ".join(order.required_skill.split()).casefold() not in selected_skills:
+            raise DomainError(409, "technician_has_active_work_for_skill", "Reassign active work orders before removing a skill required by the technician's current work")
 
     db.query(TechnicianBranchMembership).filter(
         TechnicianBranchMembership.company_id == user.company_id,

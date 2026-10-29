@@ -26,8 +26,8 @@ def scoped_schedule(db: Session, company_id: UUID, schedule_id: UUID) -> Mainten
     return obj
 
 
-def scoped_order(db: Session, company_id: UUID, order_id: UUID) -> WorkOrder:
-    obj = db.scalar(
+def scoped_order(db: Session, company_id: UUID, order_id: UUID, *, lock: bool = False) -> WorkOrder:
+    statement = (
         select(WorkOrder)
         .options(
             selectinload(WorkOrder.customer),
@@ -35,6 +35,9 @@ def scoped_order(db: Session, company_id: UUID, order_id: UUID) -> WorkOrder:
         )
         .where(WorkOrder.id == order_id, WorkOrder.company_id == company_id)
     )
+    if lock:
+        statement = statement.with_for_update()
+    obj = db.scalar(statement)
     if obj is None:
         raise DomainError(404, "work_order_not_found", "Work order not found")
     return obj
@@ -193,12 +196,21 @@ def update_work_order(
     user: User = Depends(require_roles("owner", "admin", "manager", "staff")),
     db: Session = Depends(get_db),
 ) -> WorkOrder:
-    order = scoped_order(db, user.company_id, order_id)
+    order = scoped_order(db, user.company_id, order_id, lock=True)
     if order.status not in {"scheduled", "assigned"}:
         raise DomainError(409, "work_order_not_editable", "Only scheduled or assigned work orders can be edited")
     updates = payload.model_dump(exclude_unset=True)
     if not updates:
         raise DomainError(422, "empty_update", "At least one field must be provided")
+    if "required_skill" in updates and updates["required_skill"] and order.assigned_to_user_id is not None:
+        normalized_skill = " ".join(str(updates["required_skill"]).split()).casefold()
+        assigned_skill_exists = db.scalar(select(TechnicianSkill.id).where(
+            TechnicianSkill.company_id == user.company_id,
+            TechnicianSkill.user_id == order.assigned_to_user_id,
+            TechnicianSkill.normalized_skill == normalized_skill,
+        )) is not None
+        if not assigned_skill_exists:
+            raise DomainError(409, "technician_skill_mismatch", "Reassign the work order before changing it to a skill the current technician does not have")
     start = updates.get("appointment_start", order.appointment_start)
     end = updates.get("appointment_end", order.appointment_end)
     if (start is None) != (end is None) or (start is not None and end is not None and end <= start):
@@ -221,15 +233,17 @@ def assign_technician(
     user: User = Depends(require_roles("owner", "admin", "manager")),
     db: Session = Depends(get_db),
 ) -> WorkOrder:
-    order = scoped_order(db, user.company_id, order_id)
-    if order.status not in {"scheduled", "assigned"}:
-        raise DomainError(409, "invalid_work_order_transition", "Only scheduled or assigned work orders can be assigned")
+    # Always lock the technician before the order. Profile edits use the same
+    # lock order, preventing skill/branch changes racing with dispatch.
     tech = db.scalar(select(User).where(
         User.id == payload.technician_user_id, User.company_id == user.company_id,
         User.role == "technician", User.is_active.is_(True),
-    ))
+    ).with_for_update())
     if tech is None:
         raise DomainError(404, "technician_not_found", "Active technician not found in this company")
+    order = scoped_order(db, user.company_id, order_id, lock=True)
+    if order.status not in {"scheduled", "assigned"}:
+        raise DomainError(409, "invalid_work_order_transition", "Only scheduled or assigned work orders can be assigned")
     assigned_branches = set(db.scalars(
         select(TechnicianBranchMembership.branch_id)
         .join(CompanyBranch, CompanyBranch.id == TechnicianBranchMembership.branch_id)
@@ -265,7 +279,7 @@ def start_work_order(
     order_id: UUID, user: User = Depends(require_roles("owner", "admin", "manager", "technician")),
     db: Session = Depends(get_db),
 ) -> WorkOrder:
-    order = scoped_order(db, user.company_id, order_id)
+    order = scoped_order(db, user.company_id, order_id, lock=True)
     if user.role == "technician" and order.assigned_to_user_id != user.id:
         raise DomainError(403, "work_order_not_assigned", "Technicians can start only their own assigned work")
     if order.status != "assigned":
@@ -285,7 +299,7 @@ def complete_work_order(
     user: User = Depends(require_roles("owner", "admin", "manager", "technician")),
     db: Session = Depends(get_db),
 ) -> WorkOrder:
-    order = scoped_order(db, user.company_id, order_id)
+    order = scoped_order(db, user.company_id, order_id, lock=True)
     if user.role == "technician" and order.assigned_to_user_id != user.id:
         raise DomainError(403, "work_order_not_assigned", "Technicians can complete only their own assigned work")
     if order.status != "in_progress":
@@ -315,7 +329,7 @@ def cancel_work_order(
     user: User = Depends(require_roles("owner", "admin", "manager")),
     db: Session = Depends(get_db),
 ) -> WorkOrder:
-    order = scoped_order(db, user.company_id, order_id)
+    order = scoped_order(db, user.company_id, order_id, lock=True)
     if order.status not in {"scheduled", "assigned"}:
         raise DomainError(409, "invalid_work_order_transition", "Only scheduled or assigned work can be cancelled")
     previous = order.status

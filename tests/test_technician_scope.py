@@ -18,14 +18,14 @@ def register_owner(client, email="technician-scope-owner@example.com"):
     return {"Authorization": "Bearer " + response.json()["access_token"]}
 
 
-def make_branch(client, headers):
+def make_branch(client, headers, name="Austin Branch", code="AUS", is_primary=True):
     response = client.post("/api/v1/branches", headers=headers, json={
-        "name": "Austin Branch",
-        "code": "AUS",
+        "name": name,
+        "code": code,
         "timezone": "America/Chicago",
         "country_code": "US",
         "city": "Austin",
-        "is_primary": True,
+        "is_primary": is_primary,
     })
     assert response.status_code == 201, response.text
     return response.json()
@@ -80,6 +80,7 @@ def invite_technician(client, owner_headers, branch_id, full_name, email, passwo
 def test_technician_can_only_list_and_open_assigned_work_orders(client):
     owner_headers = register_owner(client)
     branch = make_branch(client, owner_headers)
+    second_branch = make_branch(client, owner_headers, name="Dallas Branch", code="DAL", is_primary=False)
     customer_a, location_a = make_site(client, owner_headers, "Customer A")
     customer_b, location_b = make_site(client, owner_headers, "Customer B")
 
@@ -128,6 +129,30 @@ def test_technician_can_only_list_and_open_assigned_work_orders(client):
         headers=owner_headers,
         json={"technician_user_id": technician_b["id"]},
     ).status_code == 200
+
+    skill_change = client.patch(
+        f"/api/v1/work-orders/{order_a.json()['id']}",
+        headers=owner_headers,
+        json={"required_skill": "Refrigeration"},
+    )
+    assert skill_change.status_code == 409, skill_change.text
+    assert "technician_skill_mismatch" in skill_change.text
+
+    branch_change = client.patch(
+        f"/api/v1/team/technicians/{technician_a['id']}",
+        headers=owner_headers,
+        json={"branch_ids": [second_branch["id"]], "skills": ["AC Maintenance"]},
+    )
+    assert branch_change.status_code == 409, branch_change.text
+    assert "technician_has_active_work_at_branch" in branch_change.text
+
+    skills_change = client.patch(
+        f"/api/v1/team/technicians/{technician_a['id']}",
+        headers=owner_headers,
+        json={"branch_ids": [branch["id"]], "skills": ["Refrigeration"]},
+    )
+    assert skills_change.status_code == 409, skills_change.text
+    assert "technician_has_active_work_for_skill" in skills_change.text
 
     listed = client.get("/api/v1/work-orders?limit=100", headers=tech_headers)
     assert listed.status_code == 200, listed.text
