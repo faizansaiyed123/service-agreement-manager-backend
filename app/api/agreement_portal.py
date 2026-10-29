@@ -393,6 +393,7 @@ def respond_to_public_agreement(
         detail = {
             "method": "electronic",
             "reference": agreement.acceptance_reference,
+            "authorization_confirmed": payload.acceptance_confirmation,
             "version": token.agreement_version,
             "recipient_email": token.recipient_email,
             "portal_token_id": str(token.id),
