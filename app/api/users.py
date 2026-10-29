@@ -26,6 +26,8 @@ def scoped_user(db: Session, company_id: UUID, user_id: UUID) -> User:
 @router.post("", response_model=UserRead, status_code=201)
 def create_user(payload: UserCreate, actor: User = Depends(require_roles("owner", "admin")), db: Session = Depends(get_db)) -> User:
     role = payload.role
+    if role == "technician":
+        raise DomainError(409, "technician_invitation_required", "Technicians must be invited so they can set their own password and receive branch/skill assignments.")
     if actor.role != "owner" and role in {"owner", "admin"}:
         raise DomainError(403, "role_assignment_forbidden", "Only an owner can create owners or administrators")
     email = str(payload.email).lower()
@@ -78,6 +80,8 @@ def update_user(
     ):
         raise DomainError(409, "self_lockout_prevented", "You cannot deactivate yourself or change your own role")
     requested_role = updates.get("role")
+    if requested_role == "technician" and target.role != "technician":
+        raise DomainError(409, "technician_invitation_required", "Technicians must be onboarded through a one-time invitation.")
     if actor.role != "owner" and (target.role in {"owner", "admin"} or requested_role in {"owner", "admin"}):
         raise DomainError(403, "role_assignment_forbidden", "Only an owner can manage owner/admin accounts")
     for key, value in updates.items():

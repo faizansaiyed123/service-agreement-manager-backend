@@ -31,6 +31,7 @@ class User(Base, UUIDPrimaryKey, Timestamped):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(24), default="staff", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    branch_scope_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     email_verified: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
     company: Mapped[Company] = relationship(back_populates="users")
     sessions: Mapped[list["AuthSession"]] = relationship(back_populates="user", cascade="all, delete-orphan")

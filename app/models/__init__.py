@@ -9,6 +9,8 @@ from app.models.billing import Invoice, InvoiceCredit, InvoiceEvent, InvoiceLine
 from app.models.branches import BranchBusinessHours, BranchClosure, CompanyBranch
 from app.models.webhooks import WebhookDelivery, WebhookDeliveryAttempt, WebhookEndpoint
 from app.models.identity import AuthSession, Company, User
+from app.models.team import TeamInvitation, TechnicianSkill, TechnicianBranchMembership
+from app.models.customer_portal import CustomerPortalIdentity, CustomerPortalSession, CustomerPortalMembership, CustomerPortalInvitation
 from app.models.email_verification import EmailVerificationToken
 from app.models.operations import MaintenanceSchedule, WorkOrder, WorkOrderEvent
 from app.models.renewals import AgreementRenewal
@@ -19,6 +21,6 @@ from app.models.password_reset import PasswordResetToken
 
 __all__ = [
     "Agreement", "AgreementEvent", "AgreementLine", "AgreementVersion", "AgreementPortalToken", "InvoicePortalToken", "Attachment", "AuthSession", "RecurringInvoiceSchedule", "WebhookEndpoint", "WebhookDelivery", "WebhookDeliveryAttempt",
-    "Company", "EmailVerificationToken", "CompanyBranch", "InvoiceCredit", "PaymentRefund", "CustomerImportJob", "CustomerImportRow", "BranchBusinessHours", "BranchClosure", "Contact", "Customer", "Equipment", "Invoice", "InvoiceEvent", "InvoiceLine",
+    "Company", "EmailVerificationToken", "TeamInvitation", "TechnicianSkill", "TechnicianBranchMembership", "CustomerPortalIdentity", "CustomerPortalSession", "CustomerPortalMembership", "CustomerPortalInvitation", "CompanyBranch", "InvoiceCredit", "PaymentRefund", "CustomerImportJob", "CustomerImportRow", "BranchBusinessHours", "BranchClosure", "Contact", "Customer", "Equipment", "Invoice", "InvoiceEvent", "InvoiceLine",
     "MaintenanceSchedule", "NotificationAttempt", "NotificationOutbox", "PasswordResetToken", "Payment", "ServiceCatalogItem", "ServiceLocation", "SmsAttempt", "SmsOutbox", "User", "WorkOrder", "WorkOrderEvent", "AgreementRenewal",
 ]

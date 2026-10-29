@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.deps import get_current_user, require_roles
 from app.core.errors import DomainError
 from app.db.session import get_db
-from app.models import MaintenanceSchedule, User, WorkOrder, WorkOrderEvent
+from app.models import MaintenanceSchedule, TechnicianBranchMembership, TechnicianSkill, User, WorkOrder, WorkOrderEvent
 from app.services.maintenance import add_order_event, create_work_order_number, generate_scheduled_occurrence, validate_context
 from app.schemas.operations import AssignTechnician, CancelWorkOrder, GenerateOccurrence, ScheduleCreate, ScheduleRead, ScheduleUpdate, WorkOrderCompletion, WorkOrderCreate, WorkOrderEventRead, WorkOrderRead, WorkOrderUpdate
 
@@ -46,7 +46,7 @@ def create_schedule(payload: ScheduleCreate, user: User = Depends(require_roles(
     schedule = MaintenanceSchedule(
         company_id=user.company_id, branch_id=branch_id, customer_id=payload.customer_id, service_location_id=payload.service_location_id,
         equipment_id=payload.equipment_id, agreement_id=payload.agreement_id, created_by=user.id,
-        name=payload.name, description=payload.description, frequency=payload.frequency,
+        name=payload.name, description=payload.description, required_skill=payload.required_skill, frequency=payload.frequency,
         next_due_date=payload.next_due_date, checklist_template=payload.checklist_template,
     )
     db.add(schedule)
@@ -140,7 +140,7 @@ def create_work_order(
         company_id=user.company_id, branch_id=branch_id, customer_id=payload.customer_id, service_location_id=payload.service_location_id,
         equipment_id=payload.equipment_id, agreement_id=payload.agreement_id,
         work_order_number=create_work_order_number(db, user.company_id), title=payload.title.strip(),
-        description=payload.description, priority=payload.priority, scheduled_for=payload.scheduled_for,
+        description=payload.description, required_skill=payload.required_skill, priority=payload.priority, scheduled_for=payload.scheduled_for,
         appointment_start=payload.appointment_start, appointment_end=payload.appointment_end, status="scheduled",
     )
     db.add(order)
@@ -230,6 +230,20 @@ def assign_technician(
     ))
     if tech is None:
         raise DomainError(404, "technician_not_found", "Active technician not found in this company")
+    assigned_branches = set(db.scalars(select(TechnicianBranchMembership.branch_id).where(
+        TechnicianBranchMembership.company_id == user.company_id,
+        TechnicianBranchMembership.user_id == tech.id,
+    )).all())
+    if tech.branch_scope_enabled and (not assigned_branches or order.branch_id is None or order.branch_id not in assigned_branches):
+        raise DomainError(409, "technician_branch_mismatch", "This technician is not assigned to the work order's branch")
+    if order.required_skill:
+        skill_exists = db.scalar(select(TechnicianSkill.id).where(
+            TechnicianSkill.company_id == user.company_id,
+            TechnicianSkill.user_id == tech.id,
+            TechnicianSkill.normalized_skill == " ".join(order.required_skill.split()).casefold(),
+        )) is not None
+        if not skill_exists:
+            raise DomainError(409, "technician_skill_mismatch", f"Assign a technician with the required skill: {order.required_skill}")
     previous = order.status
     order.assigned_to_user_id = tech.id
     order.assigned_at = datetime.now(UTC)
