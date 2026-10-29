@@ -26,8 +26,6 @@ class AgreementPortalResponse(BaseModel):
 
     @model_validator(mode="after")
     def validate_rejection_reason(self):
-        if self.decision == "accept" and not self.acceptance_confirmation:
-            raise ValueError("Acceptance confirmation is required")
         if self.decision == "reject" and self.rejection_reason is not None:
             reason = self.rejection_reason.strip()
             if reason:
