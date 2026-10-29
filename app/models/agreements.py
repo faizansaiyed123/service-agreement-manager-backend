@@ -12,7 +12,7 @@ from app.models.base import Timestamped, UUIDPrimaryKey
 class Agreement(Base, UUIDPrimaryKey, Timestamped):
     __tablename__ = "agreements"
     __table_args__ = (
-        CheckConstraint("status in ('draft','proposed','accepted','active','suspended','cancelled','expired')", name="valid_status"),
+        CheckConstraint("status in ('draft','proposed','accepted','active','suspended','cancelled','expired','rejected')", name="valid_status"),
         CheckConstraint("billing_frequency in ('monthly','quarterly','semi_annual','annual','one_time')", name="valid_billing_frequency"),
         CheckConstraint("total_amount >= 0", name="nonnegative_total"),
         CheckConstraint("renewal_notice_days >= 0", name="nonnegative_notice_days"),
@@ -39,6 +39,9 @@ class Agreement(Base, UUIDPrimaryKey, Timestamped):
     acceptance_reference: Mapped[str | None] = mapped_column(String(255))
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cancellation_reason: Mapped[str | None] = mapped_column(Text)
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rejected_by_name: Mapped[str | None] = mapped_column(String(160))
+    rejection_reason: Mapped[str | None] = mapped_column(Text)
     version_number: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     lines: Mapped[list["AgreementLine"]] = relationship(back_populates="agreement", cascade="all, delete-orphan", order_by="AgreementLine.created_at")
 
