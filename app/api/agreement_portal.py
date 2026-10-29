@@ -34,7 +34,10 @@ def now_utc() -> datetime:
 
 
 def iso(value: datetime | None) -> str | None:
-    return value.astimezone(UTC).isoformat() if value else None
+    if value is None:
+        return None
+    normalized = value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+    return normalized.isoformat()
 
 
 def agreement_portal_view(
@@ -347,8 +350,22 @@ def respond_to_public_agreement(
     db: Session = Depends(get_db),
 ) -> AgreementPortalRead:
     token, agreement, company, customer, location, token_hash = require_pending_token(
-        db, raw_token, request, for_update=True
+        db, raw_token, request, for_update=False
     )
+    agreement = db.scalar(
+        select(Agreement)
+        .where(Agreement.id == agreement.id, Agreement.company_id == token.company_id)
+        .with_for_update()
+    )
+    if agreement is None:
+        raise DomainError(404, "agreement_not_found", "Agreement not found")
+    token = db.scalar(
+        select(AgreementPortalToken)
+        .where(AgreementPortalToken.id == token.id)
+        .with_for_update()
+    )
+    if token is None:
+        raise DomainError(404, "agreement_link_not_found", "This agreement link is invalid or unavailable")
     if token.status == "accepted":
         if payload.decision == "accept":
             return agreement_portal_view(token, agreement, company, customer, location)
