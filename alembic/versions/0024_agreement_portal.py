@@ -66,6 +66,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # The previous schema does not permit "rejected"; preserve the agreement by
+    # returning it to the proposed state before restoring the old constraint.
+    op.execute("UPDATE agreements SET status = 'proposed' WHERE status = 'rejected'")
     op.drop_index("ix_agreement_portal_tokens_expires_at", table_name="agreement_portal_tokens")
     op.drop_index("ix_agreement_portal_tokens_status", table_name="agreement_portal_tokens")
     op.drop_index("ix_agreement_portal_tokens_agreement_id", table_name="agreement_portal_tokens")
