@@ -2,8 +2,10 @@ import re
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+from sqlalchemy import select
+
 from conftest import TestingSession
-from app.models import AgreementPortalToken, NotificationOutbox
+from app.models import AgreementPortalToken
 
 
 def register_owner(client, email):
@@ -117,7 +119,7 @@ def test_resend_revokes_previous_link_and_expired_links_cannot_be_used(client):
 
     db = TestingSession()
     try:
-        token_row = db.scalar(AgreementPortalToken)
+        token_row = db.scalar(select(AgreementPortalToken).where(AgreementPortalToken.agreement_id == UUID(agreement["id"])).order_by(AgreementPortalToken.sent_at.desc()))
         token_row.sent_at = datetime.now(UTC) - timedelta(minutes=10)
         db.commit()
     finally:
