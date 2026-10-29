@@ -1,4 +1,34 @@
+import re
 from datetime import date
+
+from sqlalchemy import select
+
+from conftest import TestingSession
+from app.models import NotificationOutbox
+
+
+def invite_technician(client, headers, branch_id, email, skills=None):
+    invited = client.post("/api/v1/team/invitations", headers=headers, json={
+        "full_name": "Assigned Technician",
+        "email": email,
+        "branch_ids": [branch_id],
+        "skills": skills or [],
+    })
+    assert invited.status_code == 201, invited.text
+    with TestingSession() as db:
+        notification = db.scalar(
+            select(NotificationOutbox)
+            .where(NotificationOutbox.recipient_email == email, NotificationOutbox.event_type == "team.technician_invited")
+            .order_by(NotificationOutbox.created_at.desc(), NotificationOutbox.id.desc())
+            .limit(1)
+        )
+        assert notification is not None
+        match = re.search(r"/team/invitation/([^\s/]+)", notification.body)
+        assert match is not None, notification.body
+        token = match.group(1).rstrip(".,)")
+    accepted = client.post(f"/api/v1/team/invitations/public/{token}/accept", json={"password": "technician-password-42"})
+    assert accepted.status_code == 201, accepted.text
+    return accepted.json()["access_token"]
 
 
 def make_site(client, headers, *, city="Austin", region=None, postal_code=None, country_code="US"):
@@ -66,13 +96,13 @@ def test_technician_assignment_start_and_checklist_completion(client):
     }).json()
     headers = {"Authorization": f"Bearer {owner['access_token']}"}
     customer, location = make_site(client, headers)
-    technician = client.post("/api/v1/users", headers=headers, json={
-        "full_name": "Assigned Technician", "email": "assigned-tech@example.com",
-        "password": "technician-password-42", "role": "technician",
-    })
-    assert technician.status_code == 201, technician.text
+    branch = make_branch(client, headers, name="Dispatch Branch", code="DISPATCH", city="Austin")
+    technician_token = invite_technician(client, headers, branch["id"], "assigned-tech@example.com")
+    technician_me = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {technician_token}"})
+    assert technician_me.status_code == 200, technician_me.text
     today = date.today()
     schedule = client.post("/api/v1/maintenance/schedules", headers=headers, json={
+        "branch_id": branch["id"],
         "customer_id": customer["id"], "service_location_id": location["id"],
         "name": "Maintenance visit", "frequency": "annual", "next_due_date": today.isoformat(),
         "checklist_template": ["Inspect filter", "Test thermostat"],
@@ -81,7 +111,7 @@ def test_technician_assignment_start_and_checklist_completion(client):
     order = client.post(f"/api/v1/maintenance/schedules/{schedule.json()['id']}/generate", headers=headers, json={"occurrence_date": today.isoformat()})
     assert order.status_code == 201, order.text
     order_id = order.json()["id"]
-    assigned = client.post(f"/api/v1/work-orders/{order_id}/assign", headers=headers, json={"technician_user_id": technician.json()["id"]})
+    assigned = client.post(f"/api/v1/work-orders/{order_id}/assign", headers=headers, json={"technician_user_id": technician_me.json()["id"]})
     assert assigned.status_code == 200
     assert assigned.json()["status"] == "assigned"
 

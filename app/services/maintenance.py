@@ -226,6 +226,7 @@ def generate_scheduled_occurrence(
         service_location_id=schedule.service_location_id,
         equipment_id=schedule.equipment_id,
         agreement_id=schedule.agreement_id,
+        required_skill=schedule.required_skill,
         maintenance_schedule_id=schedule.id,
         occurrence_date=occurrence_date,
         work_order_number=create_work_order_number(db, company_id),

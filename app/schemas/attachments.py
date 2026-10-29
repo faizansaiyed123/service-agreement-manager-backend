@@ -26,6 +26,7 @@ class AttachmentRead(BaseModel):
     sha256: str
     storage_key: str
     status: str
+    customer_visible: bool
     deleted_at: datetime | None
     description: str | None
     uploaded_by_user_id: UUID | None
@@ -35,3 +36,4 @@ class AttachmentRead(BaseModel):
 
 class AttachmentUpdate(BaseModel):
     description: str | None = Field(default=None, max_length=4000)
+    customer_visible: bool | None = None

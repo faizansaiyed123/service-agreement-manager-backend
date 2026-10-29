@@ -7,9 +7,9 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from app.api import agreement_portal, agreements, assets, attachments, auth, billing, branches, companies, customer_imports, customers, exports, invoice_portal, notifications, operations, password_recovery, reports, renewals, recurring_invoices, sms, users, webhooks
+from app.api import agreement_portal, agreements, assets, attachments, auth, billing, branches, companies, customer_imports, customer_portal, customers, exports, invoice_portal, notifications, operations, password_recovery, reports, renewals, recurring_invoices, sms, team, users, webhooks
 from app.core.config import get_settings
-from app.core.auth_cookies import ACCESS_COOKIE, REFRESH_COOKIE
+from app.core.auth_cookies import ACCESS_COOKIE, REFRESH_COOKIE, CUSTOMER_ACCESS_COOKIE, CUSTOMER_REFRESH_COOKIE
 from app.core.errors import install_error_handlers
 from app.db.session import engine
 
@@ -79,9 +79,10 @@ async def request_context(request: Request, call_next):
         f"{settings.api_v1_prefix.rstrip('/')}/auth/reset-password",
         f"{settings.api_v1_prefix.rstrip('/')}/auth/verify-email",
         f"{settings.api_v1_prefix.rstrip('/')}/auth/resend-verification",
+        f"{settings.api_v1_prefix.rstrip('/')}/customer-portal/auth/login",
     }
     if request.method not in {"GET", "HEAD", "OPTIONS"} and request.url.path not in public_auth_paths:
-        has_session_cookie = bool(request.cookies.get(ACCESS_COOKIE) or request.cookies.get(REFRESH_COOKIE))
+        has_session_cookie = bool(request.cookies.get(ACCESS_COOKIE) or request.cookies.get(REFRESH_COOKIE) or request.cookies.get(CUSTOMER_ACCESS_COOKIE) or request.cookies.get(CUSTOMER_REFRESH_COOKIE))
         if has_session_cookie and (not origin or origin.rstrip("/") not in allowed_origins):
             return rejected("csrf_origin_required", "A trusted Origin header is required")
 
@@ -123,6 +124,8 @@ app.include_router(webhooks.router, prefix=settings.api_v1_prefix)
 app.include_router(recurring_invoices.router, prefix=settings.api_v1_prefix)
 app.include_router(sms.router, prefix=settings.api_v1_prefix)
 app.include_router(customers.router, prefix=settings.api_v1_prefix)
+app.include_router(team.router, prefix=settings.api_v1_prefix)
+app.include_router(customer_portal.router, prefix=settings.api_v1_prefix)
 app.include_router(assets.equipment_router, prefix=settings.api_v1_prefix)
 app.include_router(assets.catalog_router, prefix=settings.api_v1_prefix)
 app.include_router(agreements.router, prefix=settings.api_v1_prefix)

@@ -86,6 +86,7 @@ def create_payment_intent(
     amount_due: Decimal,
     idempotency_key: str,
     invoice_portal_token_id: str | None = None,
+    customer_portal_membership_id: str | None = None,
 ) -> dict[str, Any]:
     """Create a Stripe PaymentIntent for the server-calculated outstanding balance."""
     client = _client()
@@ -102,6 +103,8 @@ def create_payment_intent(
     }
     if invoice_portal_token_id:
         metadata["invoice_portal_token_id"] = invoice_portal_token_id
+    if customer_portal_membership_id:
+        metadata["customer_portal_membership_id"] = customer_portal_membership_id
 
     try:
         intent = client.PaymentIntent.create(

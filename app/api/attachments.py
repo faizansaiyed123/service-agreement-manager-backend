@@ -77,10 +77,13 @@ def upload_attachment(
     entity_id: UUID,
     file: UploadFile = File(...),
     description: str | None = Form(default=None),
+    customer_visible: bool = Form(default=False),
     user: User = Depends(require_roles(*ALL_ROLES)),
     db: Session = Depends(get_db),
 ) -> Attachment:
     ensure_entity(db, user.company_id, entity_type, entity_id)
+    if customer_visible and user.role not in {"owner", "admin"}:
+        raise DomainError(403, "attachment_customer_visibility_forbidden", "Only the company owner or an administrator can share documents with customers")
 
     filename = Path(file.filename or "").name.strip()
     if not filename or filename in {".", ".."}:
@@ -116,6 +119,7 @@ def upload_attachment(
             sha256=checksum,
             storage_key=storage_key,
             description=description,
+            customer_visible=customer_visible,
         )
         db.add(attachment)
         db.commit()
@@ -197,6 +201,11 @@ def update_attachment(
 ) -> Attachment:
     attachment = scoped_attachment(db, user.company_id, attachment_id)
     attachment.description = payload.description.strip() if payload.description else None
+    if "customer_visible" in payload.model_fields_set:
+        if user.role not in {"owner", "admin"}:
+            raise DomainError(403, "attachment_customer_visibility_forbidden", "Only the company owner or an administrator can share documents with customers")
+        if payload.customer_visible is not None:
+            attachment.customer_visible = payload.customer_visible
     db.commit()
     db.refresh(attachment)
     return attachment

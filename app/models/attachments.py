@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, String, Text, UniqueConstraint, Uuid
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, String, Text, UniqueConstraint, Uuid, false
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -41,5 +41,6 @@ class Attachment(Base, UUIDPrimaryKey, Timestamped):
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     storage_key: Mapped[str] = mapped_column(String(700), nullable=False)
     status: Mapped[str] = mapped_column(String(24), default="active", nullable=False, index=True)
+    customer_visible: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     description: Mapped[str | None] = mapped_column(Text)

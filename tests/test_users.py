@@ -14,11 +14,11 @@ def test_user_admin_tenant_scope_and_logout_revocation(client):
     other_headers = {"Authorization": f"Bearer {other['access_token']}"}
     created = client.post("/api/v1/users", headers=headers, json={
         "full_name": "Field Technician", "email": "tech@example.com",
-        "password": "technician-password-42", "role": "technician",
+        "password": "technician-password-42", "role": "staff",
     })
     assert created.status_code == 201, created.text
     tech_id = created.json()["id"]
-    assert created.json()["role"] == "technician"
+    assert created.json()["role"] == "staff"
     assert client.get("/api/v1/users", headers=headers).status_code == 200
     assert client.get(f"/api/v1/users/{tech_id}", headers=other_headers).status_code == 404
     assert client.post("/api/v1/users", headers=other_headers, json={
@@ -38,7 +38,7 @@ def test_deactivating_user_revokes_active_access_and_refresh_sessions(client):
         "full_name": "Revocable Technician",
         "email": "revocable-tech@example.com",
         "password": "technician-password-42",
-        "role": "technician",
+        "role": "staff",
     })
     assert created.status_code == 201, created.text
     technician = client.post("/api/v1/auth/login", json={
@@ -62,3 +62,17 @@ def test_deactivating_user_revokes_active_access_and_refresh_sessions(client):
         "/api/v1/auth/refresh",
         json={"refresh_token": tokens["refresh_token"]},
     ).status_code == 401
+
+
+
+def test_technician_creation_requires_invitation(client):
+    owner = register(client, "invitation-only-owner@example.com")
+    headers = {"Authorization": f"Bearer {owner['access_token']}"}
+    response = client.post("/api/v1/users", headers=headers, json={
+        "full_name": "No Direct Technician",
+        "email": "no-direct-technician@example.com",
+        "password": "technician-password-42",
+        "role": "technician",
+    })
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "technician_invitation_required"

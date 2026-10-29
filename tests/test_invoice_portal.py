@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
@@ -5,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import select
 
 from conftest import TestingSession
-from app.models import InvoicePortalToken
+from app.models import InvoicePortalToken, NotificationOutbox
 
 
 def register_owner(client, email="invoice-portal-owner@example.com"):
@@ -245,19 +246,35 @@ def test_payment_confirmation_rejects_an_intent_for_a_different_invoice(client, 
 def test_technicians_cannot_read_invoice_lists_or_send_customer_payment_links(client):
     headers = register_owner(client, "technician-billing-scope-owner@example.com")
     invoice, _ = create_invoice(client, headers)
-    created = client.post("/api/v1/users", headers=headers, json={
+    branch_response = client.post("/api/v1/branches", headers=headers, json={
+        "name": "Technician Test Branch",
+        "code": "TECH-TEST",
+        "timezone": "UTC",
+        "country_code": "US",
+        "is_primary": False,
+    })
+    assert branch_response.status_code == 201, branch_response.text
+    invite = client.post("/api/v1/team/invitations", headers=headers, json={
         "full_name": "Limited Technician",
         "email": "limited-technician@example.com",
-        "password": "technician-password-42",
-        "role": "technician",
+        "branch_ids": [branch_response.json()["id"]],
+        "skills": ["HVAC"],
     })
-    assert created.status_code == 201, created.text
-    login = client.post("/api/v1/auth/login", json={
-        "email": "limited-technician@example.com",
+    assert invite.status_code == 201, invite.text
+    with TestingSession() as db:
+        notification = db.scalar(select(NotificationOutbox).where(
+            NotificationOutbox.recipient_email == "limited-technician@example.com",
+            NotificationOutbox.event_type == "team.technician_invited",
+        ).order_by(NotificationOutbox.created_at.desc(), NotificationOutbox.id.desc()).limit(1))
+        assert notification is not None
+        match = re.search(r"/team/invitation/([^\s/]+)", notification.body)
+        assert match is not None, notification.body
+        token = match.group(1).rstrip(".,)")
+    accepted = client.post(f"/api/v1/team/invitations/public/{token}/accept", json={
         "password": "technician-password-42",
     })
-    assert login.status_code == 200, login.text
-    tech_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    assert accepted.status_code == 201, accepted.text
+    tech_headers = {"Authorization": f"Bearer {accepted.json()['access_token']}"}
 
     assert client.get("/api/v1/invoices", headers=tech_headers).status_code == 403
     assert client.get(f"/api/v1/invoices/{invoice['id']}", headers=tech_headers).status_code == 403
