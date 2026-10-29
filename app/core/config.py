@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     agreement_portal_url: str = "https://app.example.com/agreement"
     agreement_portal_token_minutes: int = Field(default=10080, ge=5, le=43200)
     agreement_portal_send_cooldown_seconds: int = Field(default=300, ge=0, le=86400)
-    invoice_portal_url: str = "http://localhost:5173/invoice"
+    invoice_portal_url: str = "https://app.example.com/invoice"
     invoice_portal_token_minutes: int = Field(default=10080, ge=5, le=43200)
     invoice_portal_send_cooldown_seconds: int = Field(default=300, ge=0, le=86400)
     storage_backend: str = "local"
