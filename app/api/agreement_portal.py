@@ -2,15 +2,14 @@ import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Literal
 from urllib.parse import quote
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.deps import get_current_user, require_roles
+from app.api.deps import require_roles
 from app.core.config import get_settings
 from app.core.errors import DomainError
 from app.core.rate_limit import enforce_rate_limit
@@ -22,7 +21,7 @@ router = APIRouter(prefix="/agreement-portal", tags=["agreement-portal"])
 
 
 def hash_token(raw_token: str) -> str:
-    return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+    return hashlib.sha256(raw_token.encode()).hexdigest()
 
 
 def portal_url(raw_token: str) -> str:
