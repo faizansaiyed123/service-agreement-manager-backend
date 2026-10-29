@@ -13,7 +13,7 @@ class AgreementPortalToken(Base, UUIDPrimaryKey, Timestamped):
     __table_args__ = (
         CheckConstraint(
             "status in ('pending','accepted','rejected','revoked','expired')",
-            name="valid_status",
+            name="agreement_portal_valid_status",
         ),
     )
 
