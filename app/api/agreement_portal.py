@@ -129,9 +129,19 @@ def require_pending_token(
     )
     now = now_utc()
     if token.status == "pending" and utc_datetime(token.expires_at) <= now:
-        token.status = "expired"
-        db.commit()
-        raise DomainError(410, "agreement_link_expired", "This agreement link has expired. Ask the provider to send a new link.")
+        token = db.scalar(
+            select(AgreementPortalToken)
+            .where(AgreementPortalToken.id == token.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if token is None:
+            raise DomainError(404, "agreement_link_not_found", "This agreement link is invalid or unavailable")
+        if token.status == "pending" and utc_datetime(token.expires_at) <= now:
+            token.status = "expired"
+            token.used_at = now
+            db.commit()
+            raise DomainError(410, "agreement_link_expired", "This agreement link has expired. Ask the provider to send a new link.")
     if token.status == "revoked":
         raise DomainError(410, "agreement_link_revoked", "This agreement link is no longer available")
     if token.status == "expired":
@@ -383,6 +393,11 @@ def respond_to_public_agreement(
     )
     if token is None:
         raise DomainError(404, "agreement_link_not_found", "This agreement link is invalid or unavailable")
+    if token.status == "pending" and utc_datetime(token.expires_at) <= now_utc():
+        token.status = "expired"
+        token.used_at = now_utc()
+        db.commit()
+        raise DomainError(410, "agreement_link_expired", "This agreement link has expired. Ask the provider to send a new link.")
     if token.status == "accepted":
         if payload.decision == "accept":
             return agreement_portal_view(token, agreement, company, customer, location)
