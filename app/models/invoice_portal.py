@@ -36,7 +36,7 @@ class InvoicePortalToken(Base, UUIDPrimaryKey, Timestamped):
     recipient_name: Mapped[str] = mapped_column(String(160), nullable=False)
     recipient_email: Mapped[str] = mapped_column(String(320), nullable=False)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
-    status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(16), default="pending", server_default="pending", nullable=False, index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
