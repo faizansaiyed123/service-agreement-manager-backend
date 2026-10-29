@@ -19,7 +19,6 @@ from app.models import (
     Contact,
     Customer,
     Invoice,
-    InvoiceEvent,
     InvoicePortalToken,
     NotificationOutbox,
     User,
