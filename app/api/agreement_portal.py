@@ -73,7 +73,7 @@ def agreement_portal_view(
         terms_text=agreement.terms_text,
         total_amount=str(agreement.total_amount),
         version_number=token.agreement_version,
-        expires_at=token.expires_at.astimezone(UTC).isoformat(),
+        expires_at=iso(token.expires_at),
         portal_status=portal_status,
         accepted_at=iso(agreement.accepted_at),
         rejected_at=iso(agreement.rejected_at),
@@ -124,7 +124,7 @@ def require_pending_token(
         subject=token_hash,
     )
     now = now_utc()
-    if token.status == "pending" and token.expires_at <= now:
+    if token.status == "pending" and utc_datetime(token.expires_at) <= now:
         token.status = "expired"
         db.commit()
         raise DomainError(410, "agreement_link_expired", "This agreement link has expired. Ask the provider to send a new link.")
@@ -152,7 +152,7 @@ def build_email_body(
         f"Value: {amount}\n"
         f"Billing: {agreement.billing_frequency.replace('_', ' ')}\n\n"
         f"Review and respond to the agreement here:\n{url}\n\n"
-        f"This secure link expires at {expires_at.astimezone(UTC).isoformat()}.\n"
+        f"This secure link expires at {iso(expires_at)}.\n"
         f"Do not forward the link. If you were not expecting this agreement, contact the service provider.\n"
     )
 
@@ -230,7 +230,7 @@ def send_agreement(
         )
         .order_by(AgreementPortalToken.sent_at.desc())
     )
-    if existing is not None and (now - existing.sent_at).total_seconds() < cooldown:
+    if existing is not None and (now - utc_datetime(existing.sent_at)).total_seconds() < cooldown:
         notification = db.get(NotificationOutbox, existing.notification_id) if existing.notification_id else None
         if notification is not None and notification.status != "dead":
             return AgreementPortalSendRead(
@@ -324,7 +324,7 @@ def send_agreement(
         recipient_name=token_record.recipient_name,
         recipient_email=token_record.recipient_email,
         agreement_version=token_record.agreement_version,
-        expires_at=token_record.expires_at.astimezone(UTC).isoformat(),
+        expires_at=iso(token_record.expires_at),
     )
 
 
