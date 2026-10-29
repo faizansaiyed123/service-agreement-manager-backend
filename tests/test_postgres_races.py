@@ -271,7 +271,7 @@ def test_concurrent_agreement_portal_decisions_serialize(pg_session_factory, pg_
     assert sent.status_code == 200, sent.text
     notification = pg_client.get(f"/api/v1/notifications/{sent.json()['notification_id']}", headers=headers)
     assert notification.status_code == 200, notification.text
-    match = re.search(r"https?://[^\\s]+/agreement/([^\\s]+)", notification.json()["body"])
+    match = re.search(r"https?://[^\s]+/agreement/([^\s]+)", notification.json()["body"])
     assert match, notification.json()["body"]
     token = match.group(1)
 
