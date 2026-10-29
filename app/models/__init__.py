@@ -1,5 +1,6 @@
 from app.models.agreements import Agreement, AgreementEvent, AgreementLine, AgreementVersion
 from app.models.agreement_portal import AgreementPortalToken
+from app.models.invoice_portal import InvoicePortalToken
 from app.models.attachments import Attachment
 from app.models.assets import Equipment, ServiceCatalogItem
 from app.models.crm import Contact, Customer, ServiceLocation
@@ -17,7 +18,7 @@ from app.models.sms import SmsAttempt, SmsOutbox
 from app.models.password_reset import PasswordResetToken
 
 __all__ = [
-    "Agreement", "AgreementEvent", "AgreementLine", "AgreementVersion", "AgreementPortalToken", "Attachment", "AuthSession", "RecurringInvoiceSchedule", "WebhookEndpoint", "WebhookDelivery", "WebhookDeliveryAttempt",
+    "Agreement", "AgreementEvent", "AgreementLine", "AgreementVersion", "AgreementPortalToken", "InvoicePortalToken", "Attachment", "AuthSession", "RecurringInvoiceSchedule", "WebhookEndpoint", "WebhookDelivery", "WebhookDeliveryAttempt",
     "Company", "EmailVerificationToken", "CompanyBranch", "InvoiceCredit", "PaymentRefund", "CustomerImportJob", "CustomerImportRow", "BranchBusinessHours", "BranchClosure", "Contact", "Customer", "Equipment", "Invoice", "InvoiceEvent", "InvoiceLine",
     "MaintenanceSchedule", "NotificationAttempt", "NotificationOutbox", "PasswordResetToken", "Payment", "ServiceCatalogItem", "ServiceLocation", "SmsAttempt", "SmsOutbox", "User", "WorkOrder", "WorkOrderEvent", "AgreementRenewal",
 ]

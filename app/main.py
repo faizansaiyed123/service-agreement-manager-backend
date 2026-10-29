@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from app.api import agreement_portal, agreements, assets, attachments, auth, billing, branches, companies, customer_imports, customers, exports, notifications, operations, password_recovery, reports, renewals, recurring_invoices, sms, users, webhooks
+from app.api import agreement_portal, agreements, assets, attachments, auth, billing, branches, companies, customer_imports, customers, exports, invoice_portal, notifications, operations, password_recovery, reports, renewals, recurring_invoices, sms, users, webhooks
 from app.core.config import get_settings
 from app.core.auth_cookies import ACCESS_COOKIE, REFRESH_COOKIE
 from app.core.errors import install_error_handlers
@@ -64,7 +64,7 @@ async def request_context(request: Request, call_next):
         response.headers["X-Request-ID"] = request_id
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         return response
 
     allowed_origins = {origin.rstrip("/") for origin in settings.cors_origins}
@@ -89,7 +89,7 @@ async def request_context(request: Request, call_next):
     response.headers["X-Request-ID"] = request_id
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     return response
 
 
@@ -127,6 +127,7 @@ app.include_router(assets.equipment_router, prefix=settings.api_v1_prefix)
 app.include_router(assets.catalog_router, prefix=settings.api_v1_prefix)
 app.include_router(agreements.router, prefix=settings.api_v1_prefix)
 app.include_router(agreement_portal.router, prefix=settings.api_v1_prefix)
+app.include_router(invoice_portal.router, prefix=settings.api_v1_prefix)
 app.include_router(users.router, prefix=settings.api_v1_prefix)
 app.include_router(operations.schedules_router, prefix=settings.api_v1_prefix)
 app.include_router(operations.work_orders_router, prefix=settings.api_v1_prefix)
