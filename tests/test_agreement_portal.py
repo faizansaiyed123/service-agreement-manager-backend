@@ -151,7 +151,14 @@ def test_resend_revokes_previous_link_and_expired_links_cannot_be_used(client):
         db.commit()
     finally:
         db.close()
+    expired_response = client.get(f"/api/v1/agreement-portal/public/{second_token}")
+    assert expired_response.status_code == 410
+    # Once marked expired, repeated reads must not reveal agreement details.
     assert client.get(f"/api/v1/agreement-portal/public/{second_token}").status_code == 410
+    assert client.post(
+        f"/api/v1/agreement-portal/public/{second_token}/respond",
+        json={"decision": "reject"},
+    ).status_code == 410
 
 
 def test_send_requires_recipient_email_and_only_customer_contacts(client):
