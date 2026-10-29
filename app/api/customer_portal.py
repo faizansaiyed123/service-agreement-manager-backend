@@ -730,7 +730,6 @@ def revoke_customer_portal_access(
     if customer is None:
         raise DomainError(404, "customer_not_found", "Customer not found")
     email = (customer.email or "").strip().lower()
-    now = _now()
     if email:
         identity = db.scalar(select(CustomerPortalIdentity).where(CustomerPortalIdentity.email == email))
         if identity is not None:
