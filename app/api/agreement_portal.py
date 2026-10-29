@@ -290,7 +290,7 @@ def send_agreement(
         },
         idempotency_key=f"agreement-portal:{token_record.id}",
         request_fingerprint=hashlib.sha256(
-            f"{agreement.id}:{token_record.id}:{token_record.recipient_email}".encode("utf-8")
+            f"{agreement.id}:{token_record.id}:{token_record.recipient_email}".encode()
         ).hexdigest(),
         status="queued",
         scheduled_at=now,
