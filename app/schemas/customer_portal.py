@@ -210,8 +210,6 @@ class CustomerPortalPaymentRead(BaseModel):
     payment_method: str
     reference: str | None
     received_at: datetime
-    notes: str | None
-    stripe_status: str | None
     refunds: list[CustomerPortalRefundRead]
 
 

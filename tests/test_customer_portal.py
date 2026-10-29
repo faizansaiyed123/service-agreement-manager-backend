@@ -3,6 +3,7 @@ import uuid
 
 from sqlalchemy import select
 
+from app.core.config import get_settings
 from conftest import TestingSession
 from app.models import NotificationOutbox
 
@@ -134,3 +135,64 @@ def test_customer_portal_is_customer_scoped_and_can_be_revoked(client):
     )
     assert disabled.status_code == 204
     assert client.get("/api/v1/customer-portal/auth/me", headers=headers).status_code == 401
+
+
+
+def test_customer_portal_only_lists_explicitly_shared_documents(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(get_settings(), "storage_root", str(tmp_path))
+    owner_headers = register_owner(client)
+    customer_a, _ = create_customer(
+        client, owner_headers, "Customer A Documents", "customer-a-documents@example.com",
+    )
+    customer_b, _ = create_customer(
+        client, owner_headers, "Customer B Documents", "customer-b-documents@example.com",
+    )
+
+    private_upload = client.post(
+        f"/api/v1/attachments/customer/{customer_a['id']}",
+        headers=owner_headers,
+        files={"file": ("internal.txt", b"private internal document", "text/plain")},
+    )
+    assert private_upload.status_code == 201, private_upload.text
+    assert private_upload.json()["customer_visible"] is False
+
+    visible_upload = client.post(
+        f"/api/v1/attachments/customer/{customer_a['id']}",
+        headers=owner_headers,
+        files={"file": ("customer-copy.txt", b"document shared with customer", "text/plain")},
+        data={"customer_visible": "true", "description": "Customer copy"},
+    )
+    assert visible_upload.status_code == 201, visible_upload.text
+    assert visible_upload.json()["customer_visible"] is True
+
+    other_visible_upload = client.post(
+        f"/api/v1/attachments/customer/{customer_b['id']}",
+        headers=owner_headers,
+        files={"file": ("other-customer.txt", b"belongs to another customer", "text/plain")},
+        data={"customer_visible": "true"},
+    )
+    assert other_visible_upload.status_code == 201, other_visible_upload.text
+
+    customer_headers, identity = invite_customer(
+        client, owner_headers, customer_a["id"], "customer-a-documents@example.com",
+    )
+    membership_id = identity["memberships"][0]["membership_id"]
+    listed = client.get(
+        f"/api/v1/customer-portal/memberships/{membership_id}/documents",
+        headers=customer_headers,
+    )
+    assert listed.status_code == 200, listed.text
+    assert [item["id"] for item in listed.json()] == [visible_upload.json()["id"]]
+    assert listed.json()[0]["original_filename"] == "customer-copy.txt"
+
+    downloaded = client.get(
+        f"/api/v1/customer-portal/memberships/{membership_id}/documents/{visible_upload.json()['id']}",
+        headers=customer_headers,
+    )
+    assert downloaded.status_code == 200
+    assert downloaded.content == b"document shared with customer"
+    private_download = client.get(
+        f"/api/v1/customer-portal/memberships/{membership_id}/documents/{private_upload.json()['id']}",
+        headers=customer_headers,
+    )
+    assert private_download.status_code == 404

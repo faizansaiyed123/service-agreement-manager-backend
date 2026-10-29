@@ -42,6 +42,7 @@ def test_attachment_upload_list_download_update_and_delete(client, tmp_path):
         assert attachment["entity_id"] == customer_id
         assert attachment["size_bytes"] == len(content)
         assert attachment["sha256"] == checksum
+        assert attachment["customer_visible"] is False
         attachment_id = attachment["id"]
 
         listed = client.get(
@@ -54,10 +55,11 @@ def test_attachment_upload_list_download_update_and_delete(client, tmp_path):
         updated = client.patch(
             f"/api/v1/attachments/{attachment_id}",
             headers=headers,
-            json={"description": "Updated agreement attachment"},
+            json={"description": "Updated agreement attachment", "customer_visible": True},
         )
         assert updated.status_code == 200
         assert updated.json()["description"] == "Updated agreement attachment"
+        assert updated.json()["customer_visible"] is True
 
         downloaded = client.get(f"/api/v1/attachments/{attachment_id}/download", headers=headers)
         assert downloaded.status_code == 200
@@ -103,3 +105,55 @@ def test_attachment_is_tenant_scoped_and_target_must_belong_to_company(client):
     )
     assert cross_upload.status_code == 404
     assert cross_upload.json()["error"]["code"] == "attachment_entity_not_found"
+
+
+
+def test_only_owner_or_admin_can_share_attachments_with_customers(client, tmp_path):
+    settings = get_settings()
+    original_root = settings.storage_root
+    settings.storage_root = str(tmp_path)
+    try:
+        owner_headers = register(client, "Attachment Sharing HVAC", "attachment-sharing@example.com")
+        customer = client.post("/api/v1/customers", headers=owner_headers, json={"name": "Sharing Customer"})
+        assert customer.status_code == 201, customer.text
+        customer_id = customer.json()["id"]
+
+        staff = client.post("/api/v1/users", headers=owner_headers, json={
+            "full_name": "Internal Staff",
+            "email": "attachment-sharing-staff@example.com",
+            "password": "internal-staff-password-42",
+            "role": "staff",
+        })
+        assert staff.status_code == 201, staff.text
+        staff_login = client.post("/api/v1/auth/login", json={
+            "email": "attachment-sharing-staff@example.com",
+            "password": "internal-staff-password-42",
+        })
+        assert staff_login.status_code == 200, staff_login.text
+        staff_headers = {"Authorization": "Bearer " + staff_login.json()["access_token"]}
+
+        uploaded = client.post(
+            f"/api/v1/attachments/customer/{customer_id}",
+            headers=staff_headers,
+            files={"file": ("private.txt", b"internal only", "text/plain")},
+            data={"customer_visible": "true"},
+        )
+        assert uploaded.status_code == 403, uploaded.text
+        assert uploaded.json()["error"]["code"] == "attachment_customer_visibility_forbidden"
+
+        private_upload = client.post(
+            f"/api/v1/attachments/customer/{customer_id}",
+            headers=staff_headers,
+            files={"file": ("private.txt", b"internal only", "text/plain")},
+        )
+        assert private_upload.status_code == 201, private_upload.text
+        private_id = private_upload.json()["id"]
+        denied = client.patch(
+            f"/api/v1/attachments/{private_id}",
+            headers=staff_headers,
+            json={"customer_visible": True},
+        )
+        assert denied.status_code == 403
+        assert denied.json()["error"]["code"] == "attachment_customer_visibility_forbidden"
+    finally:
+        settings.storage_root = original_root

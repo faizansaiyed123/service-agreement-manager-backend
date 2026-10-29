@@ -819,7 +819,6 @@ def portal_payments(
             id=payment.id, invoice_id=invoice.id, invoice_number=invoice.invoice_number,
             amount=payment.amount, payment_method=payment.payment_method,
             reference=payment.reference, received_at=payment.received_at,
-            notes=payment.notes, stripe_status=payment.stripe_status,
             refunds=refunds[payment.id],
         )
         for payment, invoice in rows
@@ -836,6 +835,7 @@ def portal_documents(
     query = select(Attachment).where(
         Attachment.company_id == company.id,
         Attachment.status == "active",
+        Attachment.customer_visible.is_(True),
         _customer_document_filter(company, customer),
     ).order_by(Attachment.created_at.desc(), Attachment.id).limit(200)
     items = list(db.scalars(query).all())
@@ -861,6 +861,7 @@ def portal_download_document(
         Attachment.id == attachment_id,
         Attachment.company_id == company.id,
         Attachment.status == "active",
+        Attachment.customer_visible.is_(True),
         _customer_document_filter(company, customer),
     ))
     if attachment is None:
