@@ -81,6 +81,7 @@ jobs:
           SMTP_STARTTLS=true
           PASSWORD_RESET_URL=https://app.example.com/reset-password
           EMAIL_VERIFICATION_URL=https://app.example.com/verify-email
+          AGREEMENT_PORTAL_URL=https://app.example.com/agreement
           STORAGE_BACKEND=local
           STORAGE_ROOT=/srv/app/storage
           WEBHOOK_ENCRYPTION_KEY=ci-only-webhook-encryption-key-1234567890abcdef
