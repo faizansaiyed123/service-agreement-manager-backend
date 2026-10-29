@@ -396,6 +396,8 @@ def respond_to_public_agreement(
         raise DomainError(409, "agreement_no_longer_actionable", "This agreement is no longer available for response")
 
     now = now_utc()
+    if payload.decision == "accept" and not payload.acceptance_confirmation:
+        raise DomainError(422, "acceptance_confirmation_required", "Confirm that you reviewed the agreement and are authorized to accept it")
     if payload.decision == "accept":
         agreement.accepted_by_name = token.recipient_name
         agreement.acceptance_method = "electronic"
