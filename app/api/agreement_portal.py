@@ -134,6 +134,8 @@ def require_pending_token(
         raise DomainError(410, "agreement_link_expired", "This agreement link has expired. Ask the provider to send a new link.")
     if token.status == "revoked":
         raise DomainError(410, "agreement_link_revoked", "This agreement link is no longer available")
+    if token.status == "expired":
+        raise DomainError(410, "agreement_link_expired", "This agreement link has expired. Ask the provider to send a new link.")
     return token, agreement, company, customer, location, token_hash
 
 
@@ -369,6 +371,7 @@ def respond_to_public_agreement(
         select(Agreement)
         .where(Agreement.id == agreement.id, Agreement.company_id == token.company_id)
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
     if agreement is None:
         raise DomainError(404, "agreement_not_found", "Agreement not found")
@@ -376,6 +379,7 @@ def respond_to_public_agreement(
         select(AgreementPortalToken)
         .where(AgreementPortalToken.id == token.id)
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
     if token is None:
         raise DomainError(404, "agreement_link_not_found", "This agreement link is invalid or unavailable")
