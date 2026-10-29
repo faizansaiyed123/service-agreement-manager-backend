@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     email_verification_token_minutes: int = Field(default=60, ge=5, le=1440)
     email_verification_cooldown_seconds: int = Field(default=60, ge=0, le=86400)
     email_verification_url: str = "http://localhost:3000/verify-email"
+    agreement_portal_url: str = "http://localhost:3000/agreement"
+    agreement_portal_token_minutes: int = Field(default=10080, ge=5, le=43200)
+    agreement_portal_send_cooldown_seconds: int = Field(default=300, ge=0, le=86400)
     storage_backend: str = "local"
     storage_root: str = "./storage"
     storage_max_file_bytes: int = Field(default=25 * 1024 * 1024, ge=1, le=500 * 1024 * 1024)
@@ -181,7 +184,7 @@ class Settings(BaseSettings):
             if self.smtp_username and not self.smtp_password:
                 raise ValueError("SMTP_PASSWORD is required when SMTP_USERNAME is configured")
             trusted_origins = {origin.lower() for origin in self.cors_origins}
-            for value in (self.password_reset_url, self.email_verification_url):
+            for value in (self.password_reset_url, self.email_verification_url, self.agreement_portal_url):
                 page = urlsplit(value)
                 origin = (page.scheme + "://" + page.netloc).lower()
                 invalid_local_host = not page.hostname or page.hostname.lower() in {"localhost", "127.0.0.1", "::1"} or page.hostname.lower().endswith(".localhost")
