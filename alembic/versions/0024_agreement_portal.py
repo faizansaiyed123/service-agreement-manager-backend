@@ -76,7 +76,7 @@ def downgrade() -> None:
     op.drop_column("agreements", "rejected_at")
     op.drop_constraint("ck_agreements_valid_status", "agreements", type_="check")
     op.create_check_constraint(
-        "valid_status",
+        "ck_agreements_valid_status",
         "agreements",
         "status in ('draft','proposed','accepted','active','suspended','cancelled','expired')",
     )
