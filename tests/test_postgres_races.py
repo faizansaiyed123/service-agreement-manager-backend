@@ -1,6 +1,8 @@
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime
+from uuid import UUID
 
 import pytest
 from fastapi import Response
@@ -11,7 +13,7 @@ from sqlalchemy.orm import sessionmaker
 from app.api.billing import record_payment
 from app.api.deps import get_db
 from app.core.errors import DomainError
-from app.models import Payment, User, WorkOrder
+from app.models import Agreement, AgreementEvent, AgreementPortalToken, Payment, User, WorkOrder
 from app.schemas.billing import PaymentCreate
 from app.services.maintenance import generate_scheduled_occurrence
 from app.main import app
@@ -215,5 +217,99 @@ def test_concurrent_maintenance_generation_creates_one_occurrence(pg_session_fac
             WorkOrder.occurrence_date == today,
         )).all())
         assert len(orders) == 1
+    finally:
+        db.close()
+
+
+def test_concurrent_agreement_portal_decisions_serialize(pg_session_factory, pg_client):
+    headers = register(pg_client, "race-agreement-portal@example.com")
+    customer_res = pg_client.post(
+        "/api/v1/customers",
+        headers=headers,
+        json={"name": "Race Agreement Customer", "email": "race-agreement-customer@example.com"},
+    )
+    assert customer_res.status_code == 201, customer_res.text
+    customer = customer_res.json()
+    location_res = pg_client.post(
+        f"/api/v1/customers/{customer['id']}/service-locations",
+        headers=headers,
+        json={"name": "Race Agreement Site", "address_line1": "3 Lock Street", "city": "Austin"},
+    )
+    assert location_res.status_code == 201, location_res.text
+    location = location_res.json()
+
+    today = datetime.now(UTC).date()
+    agreement_res = pg_client.post(
+        "/api/v1/agreements",
+        headers=headers,
+        json={
+            "customer_id": customer["id"],
+            "service_location_id": location["id"],
+            "title": "Concurrent Portal Decision",
+            "start_date": today.isoformat(),
+            "end_date": date(today.year + 1, today.month, min(today.day, 28)).isoformat(),
+            "billing_frequency": "annual",
+            "terms_text": "Concurrency test agreement.",
+            "lines": [{
+                "service_code": "RACE-AGREEMENT",
+                "name": "Annual service",
+                "quantity": "1",
+                "unit_price": "100.00",
+            }],
+        },
+    )
+    assert agreement_res.status_code == 201, agreement_res.text
+    agreement_id = agreement_res.json()["id"]
+    proposed = pg_client.post(f"/api/v1/agreements/{agreement_id}/propose", headers=headers)
+    assert proposed.status_code == 200, proposed.text
+
+    sent = pg_client.post(
+        f"/api/v1/agreement-portal/agreements/{agreement_id}/send",
+        headers=headers,
+        json={},
+    )
+    assert sent.status_code == 200, sent.text
+    notification = pg_client.get(f"/api/v1/notifications/{sent.json()['notification_id']}", headers=headers)
+    assert notification.status_code == 200, notification.text
+    match = re.search(r"https?://[^\\s]+/agreement/([^\\s]+)", notification.json()["body"])
+    assert match, notification.json()["body"]
+    token = match.group(1)
+
+    def decide(decision: str):
+        payload = {"decision": decision}
+        if decision == "accept":
+            payload["acceptance_confirmation"] = True
+        else:
+            payload["rejection_reason"] = "Concurrent race test"
+        response = pg_client.post(
+            f"/api/v1/agreement-portal/public/{token}/respond",
+            json=payload,
+        )
+        return response.status_code, response.json()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(decide, ["accept", "reject"]))
+
+    assert sorted(status for status, _ in results) == [200, 409]
+
+    db = pg_session_factory()
+    try:
+        agreement = db.get(Agreement, UUID(agreement_id))
+        portal_token = db.scalar(
+            select(AgreementPortalToken).where(
+                AgreementPortalToken.agreement_id == UUID(agreement_id)
+            )
+        )
+        decision_events = list(db.scalars(
+            select(AgreementEvent).where(
+                AgreementEvent.agreement_id == UUID(agreement_id),
+                AgreementEvent.event_type.in_(["agreement.accepted", "agreement.rejected"]),
+            )
+        ).all())
+        assert agreement is not None
+        assert agreement.status in {"active", "rejected"}
+        assert portal_token is not None
+        assert portal_token.status == ("accepted" if agreement.status == "active" else "rejected")
+        assert len(decision_events) == 1
     finally:
         db.close()
