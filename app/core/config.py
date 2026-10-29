@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     email_verification_token_minutes: int = Field(default=60, ge=5, le=1440)
     email_verification_cooldown_seconds: int = Field(default=60, ge=0, le=86400)
     email_verification_url: str = "http://localhost:3000/verify-email"
-    agreement_portal_url: str = "http://localhost:3000/agreement"
+    agreement_portal_url: str = "https://app.example.com/agreement"
     agreement_portal_token_minutes: int = Field(default=10080, ge=5, le=43200)
     agreement_portal_send_cooldown_seconds: int = Field(default=300, ge=0, le=86400)
     storage_backend: str = "local"
