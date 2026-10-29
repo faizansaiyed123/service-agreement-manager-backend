@@ -17,6 +17,7 @@ class ScheduleCreate(BaseModel):
     agreement_id: UUID | None = None
     name: str = Field(min_length=2, max_length=160)
     description: str | None = Field(default=None, max_length=5000)
+    required_skill: str | None = Field(default=None, max_length=80)
     frequency: Literal["monthly", "quarterly", "semi_annual", "annual"]
     next_due_date: date
     checklist_template: list[str] = Field(default_factory=list, max_length=50)
@@ -24,6 +25,7 @@ class ScheduleCreate(BaseModel):
     @model_validator(mode="after")
     def normalize_checklist(self):
         self.name = self.name.strip()
+        self.required_skill = " ".join(self.required_skill.split()) if self.required_skill else None
         self.checklist_template = [item.strip() for item in self.checklist_template]
         if not self.name or any(not item for item in self.checklist_template):
             raise ValueError("Name and checklist entries cannot be blank")
@@ -35,6 +37,7 @@ class ScheduleCreate(BaseModel):
 class ScheduleUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=160)
     description: str | None = Field(default=None, max_length=5000)
+    required_skill: str | None = Field(default=None, max_length=80)
     frequency: Literal["monthly", "quarterly", "semi_annual", "annual"] | None = None
     next_due_date: date | None = None
     checklist_template: list[str] | None = Field(default=None, max_length=50)
@@ -52,6 +55,7 @@ class ScheduleRead(ORMModel):
     created_by: UUID | None
     name: str
     description: str | None
+    required_skill: str | None
     frequency: str
     next_due_date: date
     checklist_template: list[str]
@@ -74,6 +78,7 @@ class WorkOrderCreate(BaseModel):
     agreement_id: UUID | None = None
     title: str = Field(min_length=2, max_length=180)
     description: str | None = Field(default=None, max_length=10000)
+    required_skill: str | None = Field(default=None, max_length=80)
     priority: Literal["low", "normal", "high", "emergency"] = "normal"
     scheduled_for: date
     appointment_start: datetime | None = None
@@ -83,6 +88,7 @@ class WorkOrderCreate(BaseModel):
     def validate_appointment(self):
         validate_appointment_window(self.appointment_start, self.appointment_end)
         self.title = self.title.strip()
+        self.required_skill = " ".join(self.required_skill.split()) if self.required_skill else None
         if not self.title:
             raise ValueError("title cannot be blank")
         return self
@@ -91,6 +97,7 @@ class WorkOrderCreate(BaseModel):
 class WorkOrderUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=2, max_length=180)
     description: str | None = Field(default=None, max_length=10000)
+    required_skill: str | None = Field(default=None, max_length=80)
     priority: Literal["low", "normal", "high", "emergency"] | None = None
     scheduled_for: date | None = None
     appointment_start: datetime | None = None
@@ -100,6 +107,12 @@ class WorkOrderUpdate(BaseModel):
     def validate_appointment(self):
         if "appointment_start" in self.model_fields_set or "appointment_end" in self.model_fields_set:
             validate_appointment_window(self.appointment_start, self.appointment_end)
+        if self.required_skill is not None:
+            self.required_skill = " ".join(self.required_skill.split()) or None
+        if self.title is not None:
+            self.title = self.title.strip()
+            if not self.title:
+                raise ValueError("title cannot be blank")
         return self
 
 
@@ -141,6 +154,7 @@ class WorkOrderRead(ORMModel):
     work_order_number: str
     title: str
     description: str | None
+    required_skill: str | None
     status: str
     priority: str
     scheduled_for: date

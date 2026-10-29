@@ -18,6 +18,8 @@ def valid_production_settings(**overrides) -> Settings:
         "smtp_starttls": True,
         "password_reset_url": "https://app.example.com/reset-password",
         "email_verification_url": "https://app.example.com/verify-email",
+        "team_invitation_url": "https://app.example.com/team/invitation",
+        "customer_portal_invitation_url": "https://app.example.com/customer-portal/invitation",
         "webhook_encryption_key": "production-webhook-secret-value-that-is-at-least-32-chars",
         "notification_encryption_key": "production-notification-secret-value-over-32-characters",
     }
