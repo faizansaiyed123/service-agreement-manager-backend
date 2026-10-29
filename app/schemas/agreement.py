@@ -100,6 +100,9 @@ class AgreementRead(ORMModel):
     acceptance_reference: str | None
     cancelled_at: datetime | None
     cancellation_reason: str | None
+    rejected_at: datetime | None
+    rejected_by_name: str | None
+    rejection_reason: str | None
     version_number: int
     created_at: datetime
     updated_at: datetime
